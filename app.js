@@ -6,7 +6,13 @@ const MAX_TENANTS_PER_ROOM = 4;
 
 const defaultData = {
   settings: {
-    electricityRate: 8.5
+    electricityRate: 8.5,
+    occupancyRent: {
+      1: 2500,
+      2: 2800,
+      3: 3600,
+      4: 3600
+    }
   },
   rooms: [
     {
@@ -62,6 +68,11 @@ const els = {
   resetRoomForm: document.querySelector("#resetRoomForm"),
   roomsTable: document.querySelector("#roomsTable"),
   roomCount: document.querySelector("#roomCount"),
+  rentSettingsForm: document.querySelector("#rentSettingsForm"),
+  rentFor1: document.querySelector("#rentFor1"),
+  rentFor2: document.querySelector("#rentFor2"),
+  rentFor3: document.querySelector("#rentFor3"),
+  rentFor4: document.querySelector("#rentFor4"),
   tenantForm: document.querySelector("#tenantForm"),
   tenantId: document.querySelector("#tenantId"),
   tenantName: document.querySelector("#tenantName"),
@@ -175,7 +186,14 @@ function electricityRate() {
 }
 
 function ensureSettings() {
-  data.settings = { ...structuredClone(defaultData.settings), ...(data.settings || {}) };
+  data.settings = {
+    ...structuredClone(defaultData.settings),
+    ...(data.settings || {}),
+    occupancyRent: {
+      ...structuredClone(defaultData.settings.occupancyRent),
+      ...(data.settings?.occupancyRent || {})
+    }
+  };
 }
 
 function today() {
@@ -234,6 +252,12 @@ function roomCapacity(room) {
   return Math.min(Math.max(Number(room?.capacity) || 1, 1), MAX_TENANTS_PER_ROOM);
 }
 
+function occupancyRent(count) {
+  const normalized = Math.min(Math.max(Number(count) || 1, 1), MAX_TENANTS_PER_ROOM);
+  const rent = Number(data.settings?.occupancyRent?.[normalized]);
+  return Number.isFinite(rent) && rent >= 0 ? rent : Number(defaultData.settings.occupancyRent[normalized] || 0);
+}
+
 function findRoom(roomId) {
   return data.rooms.find((room) => room.id === roomId);
 }
@@ -250,7 +274,7 @@ function tenantRoomLabel(tenant) {
 function tenantRentAmount(tenant) {
   const tenantRent = Number(tenant.rent);
   if (Number.isFinite(tenantRent) && tenantRent > 0) return tenantRent;
-  return Number(findRoom(tenant.roomId)?.rent || 0);
+  return occupancyRent(roomTenants(tenant.roomId).length);
 }
 
 function roomOccupantsHtml(tenants) {
@@ -561,6 +585,18 @@ function renderTenantOptions() {
   els.paymentTenant.innerHTML = options || '<option value="">Add an active tenant first</option>';
 }
 
+function renderRentSettings() {
+  els.rentFor1.value = occupancyRent(1);
+  els.rentFor2.value = occupancyRent(2);
+  els.rentFor3.value = occupancyRent(3);
+  els.rentFor4.value = occupancyRent(4);
+}
+
+function fillPaymentAmountFromTenant() {
+  const tenant = findTenant(els.paymentTenant.value);
+  if (tenant) els.paymentAmount.value = tenantRentAmount(tenant);
+}
+
 function renderDashboard() {
   const occupied = data.rooms.filter((room) => roomTenants(room.id).length > 0).length;
   const monthlyRent = activeTenants().reduce((sum, tenant) => sum + tenantRentAmount(tenant), 0);
@@ -582,7 +618,7 @@ function renderDashboard() {
         const badgeClass = status === "Full" ? "red" : status === "Partial" ? "orange" : "green";
         return `
           <div class="status-item">
-            <div><strong>Room ${escapeHtml(room.number)}</strong><span>${count}/${capacity} tenants, ${money(room.rent)}/month default</span></div>
+            <div><strong>Room ${escapeHtml(room.number)}</strong><span>${count}/${capacity} tenants, ${money(occupancyRent(count || 1))}/tenant current rent</span></div>
             <span class="badge ${badgeClass}">${status}</span>
           </div>
         `;
@@ -630,16 +666,17 @@ function renderRooms() {
 
   els.roomCount.textContent = `${rooms.length} rooms`;
   els.roomsTable.innerHTML = table(
-    ["Room", "Floor", "Occupancy", "Rent", "Deposit", "Notes", "Actions"],
+    ["Room", "Floor", "Occupancy", "Current Rent", "Deposit", "Notes", "Actions"],
     rooms.map((room) => {
       const tenants = roomTenants(room.id);
       const capacity = roomCapacity(room);
+      const currentRent = occupancyRent(tenants.length || 1);
       return `
         <tr>
           <td><strong>${escapeHtml(room.number)}</strong></td>
           <td>${escapeHtml(room.floor || "-")}</td>
           <td>${tenants.length}/${capacity}${room.capacity > MAX_TENANTS_PER_ROOM ? " (max 4)" : ""}<br>${roomOccupantsHtml(tenants)}</td>
-          <td>${money(room.rent)}</td>
+          <td><strong>${money(currentRent)}</strong><br><small>per tenant</small></td>
           <td>${money(room.deposit)}</td>
           <td>${escapeHtml(room.notes || "-")}</td>
           <td class="row-actions">
@@ -882,6 +919,7 @@ function renderReports() {
 function renderAll() {
   renderRoomOptions();
   renderTenantOptions();
+  renderRentSettings();
   renderDashboard();
   renderRooms();
   renderTenants();
@@ -966,6 +1004,20 @@ els.roomForm.addEventListener("submit", (event) => {
 });
 
 els.resetRoomForm.addEventListener("click", resetRoomForm);
+
+els.rentSettingsForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  ensureSettings();
+  data.settings.occupancyRent = {
+    1: Number(els.rentFor1.value) || 0,
+    2: Number(els.rentFor2.value) || 0,
+    3: Number(els.rentFor3.value) || 0,
+    4: Number(els.rentFor4.value) || 0
+  };
+  saveData();
+  renderAll();
+  toast("Rent settings updated");
+});
 
 els.tenantForm.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -1086,6 +1138,8 @@ els.paymentForm.addEventListener("submit", (event) => {
   toast("Payment recorded");
   renderAll();
 });
+
+els.paymentTenant.addEventListener("change", fillPaymentAmountFromTenant);
 
 ["input", "change"].forEach((eventName) => {
   [els.previousReading, els.currentReading, els.unitRate, els.fixedCharge].forEach((input) => {

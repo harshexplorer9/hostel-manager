@@ -12,10 +12,10 @@
       content="Manage hostel rooms, tenants, rent payments, room-wise electricity bills, and monthly dues."
     />
     <title>Hostel Manager</title>
-    <link rel="manifest" href="manifest.webmanifest?v=12" />
+    <link rel="manifest" href="manifest.webmanifest?v=13" />
     <link rel="icon" href="icons/hostel-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icons/hostel-icon.svg" />
-    <link rel="stylesheet" href="styles.css?v=12" />
+    <link rel="stylesheet" href="styles.css?v=13" />
   </head>
   <body>
     <div class="app-shell">
@@ -93,6 +93,19 @@
         </section>
 
         <section id="rooms" class="view">
+          <form id="rentSettingsForm" class="panel settings-panel">
+            <div class="panel-head">
+              <h3>Rent Settings</h3>
+              <span class="pill">Per tenant by room occupancy</span>
+            </div>
+            <div class="settings-grid">
+              <label>1 Tenant<input id="rentFor1" type="number" min="0" required /></label>
+              <label>2 Tenants<input id="rentFor2" type="number" min="0" required /></label>
+              <label>3 Tenants<input id="rentFor3" type="number" min="0" required /></label>
+              <label>4 Tenants<input id="rentFor4" type="number" min="0" required /></label>
+              <button type="submit">Save Rent Settings</button>
+            </div>
+          </form>
           <div class="content-grid">
             <form id="roomForm" class="panel form-panel">
               <h3>Add / Update Room</h3>
@@ -100,7 +113,7 @@
               <label>Room Number<input id="roomNumber" required placeholder="101" /></label>
               <label>Floor<input id="roomFloor" placeholder="Ground / 1st / 2nd" /></label>
               <label>Capacity Max 4<input id="roomCapacity" type="number" min="1" max="4" value="1" /></label>
-              <label>Monthly Rent<input id="roomRent" type="number" min="0" required placeholder="5000" /></label>
+              <label>Room Rent Note<input id="roomRent" type="number" min="0" placeholder="Optional old/manual rent" /></label>
               <label>Deposit<input id="roomDeposit" type="number" min="0" placeholder="10000" /></label>
               <label>Notes<textarea id="roomNotes" rows="3" placeholder="Attached bathroom, fan, cupboard..."></textarea></label>
               <button type="submit">Save Room</button>
@@ -125,7 +138,7 @@
               <label>Mobile Number<input id="tenantMobile" required placeholder="9876543210" /></label>
               <label>Alternate Mobile<input id="tenantAltMobile" placeholder="Optional" /></label>
               <label>Room<select id="tenantRoom" required></select></label>
-              <label>Tenant Monthly Rent<input id="tenantRent" type="number" min="0" placeholder="Leave blank to use room rent" /></label>
+              <label>Custom Monthly Rent<input id="tenantRent" type="number" min="0" placeholder="Blank = use room occupancy rent" /></label>
               <label>Joining Date<input id="tenantJoinDate" type="date" required /></label>
               <label>ID Proof Type<input id="tenantIdType" placeholder="Aadhaar / PAN / Passport" /></label>
               <label>ID Proof Number<input id="tenantIdNumber" placeholder="ID number" /></label>
@@ -261,6 +274,6 @@
         projectId: "hostel-manage-4ab56"
       };
     </script>
-    <script src="app.js?v=12"></script>
+    <script src="app.js?v=13"></script>
   </body>
 </html>

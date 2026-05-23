@@ -242,6 +242,16 @@ button.secondary:hover,
   grid-template-columns: 360px minmax(0, 1fr);
 }
 
+.settings-panel {
+  margin-bottom: 18px;
+}
+
+.settings-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .panel {
   min-width: 0;
   padding: 20px;
@@ -687,7 +697,8 @@ td {
   .app-shell,
   .content-grid,
   .dashboard-grid,
-  .metric-grid {
+  .metric-grid,
+  .settings-grid {
     grid-template-columns: 1fr;
   }
 
