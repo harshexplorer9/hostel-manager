@@ -12,10 +12,10 @@
       content="Manage hostel rooms, tenants, rent payments, room-wise electricity bills, and monthly dues."
     />
     <title>Hostel Manager</title>
-    <link rel="manifest" href="manifest.webmanifest?v=14" />
+    <link rel="manifest" href="manifest.webmanifest?v=15" />
     <link rel="icon" href="icons/hostel-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icons/hostel-icon.svg" />
-    <link rel="stylesheet" href="styles.css?v=14" />
+    <link rel="stylesheet" href="styles.css?v=15" />
   </head>
   <body>
     <div class="app-shell">
@@ -96,13 +96,13 @@
           <form id="rentSettingsForm" class="panel settings-panel">
             <div class="panel-head">
               <h3>Rent Settings</h3>
-              <span class="pill">Per tenant by room occupancy</span>
+              <span class="pill">Total room rent by occupancy</span>
             </div>
             <div class="settings-grid">
-              <label>1 Tenant<input id="rentFor1" type="number" min="0" required /></label>
-              <label>2 Tenants<input id="rentFor2" type="number" min="0" required /></label>
-              <label>3 Tenants<input id="rentFor3" type="number" min="0" required /></label>
-              <label>4 Tenants<input id="rentFor4" type="number" min="0" required /></label>
+              <label>1 Tenant Total<input id="rentFor1" type="number" min="0" required /></label>
+              <label>2 Tenants Total<input id="rentFor2" type="number" min="0" required /></label>
+              <label>3 Tenants Total<input id="rentFor3" type="number" min="0" required /></label>
+              <label>4 Tenants Total<input id="rentFor4" type="number" min="0" required /></label>
               <button type="submit">Save Rent Settings</button>
             </div>
           </form>
@@ -274,6 +274,6 @@
         projectId: "hostel-manage-4ab56"
       };
     </script>
-    <script src="app.js?v=14"></script>
+    <script src="app.js?v=15"></script>
   </body>
 </html>

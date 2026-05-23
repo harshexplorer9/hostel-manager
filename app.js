@@ -274,7 +274,8 @@ function tenantRoomLabel(tenant) {
 function tenantRentAmount(tenant) {
   const tenantRent = Number(tenant.rent);
   if (Number.isFinite(tenantRent) && tenantRent > 0) return tenantRent;
-  return occupancyRent(roomTenants(tenant.roomId).length);
+  const tenantCount = Math.max(roomTenants(tenant.roomId).length, 1);
+  return occupancyRent(tenantCount) / tenantCount;
 }
 
 function roomOccupantsHtml(tenants) {
@@ -627,9 +628,11 @@ function renderDashboard() {
         const capacity = roomCapacity(room);
         const status = count >= capacity ? "Full" : count > 0 ? "Partial" : "Vacant";
         const badgeClass = status === "Full" ? "red" : status === "Partial" ? "orange" : "green";
+        const roomTotalRent = roomRentTotal(room.id);
+        const tenantShare = count ? roomTotalRent / count : occupancyRent(1);
         return `
           <div class="status-item">
-            <div><strong>Room ${escapeHtml(room.number)}</strong><span>${count}/${capacity} tenants, ${money(occupancyRent(count || 1))}/tenant current rent</span></div>
+            <div><strong>Room ${escapeHtml(room.number)}</strong><span>${count}/${capacity} tenants, ${money(roomTotalRent || occupancyRent(1))} room rent, ${money(tenantShare)} each</span></div>
             <span class="badge ${badgeClass}">${status}</span>
           </div>
         `;
@@ -677,17 +680,18 @@ function renderRooms() {
 
   els.roomCount.textContent = `${rooms.length} rooms`;
   els.roomsTable.innerHTML = table(
-    ["Room", "Floor", "Occupancy", "Current Rent", "Deposit", "Notes", "Actions"],
+    ["Room", "Floor", "Occupancy", "Rent Split", "Deposit", "Notes", "Actions"],
     rooms.map((room) => {
       const tenants = roomTenants(room.id);
       const capacity = roomCapacity(room);
-      const currentRent = occupancyRent(tenants.length || 1);
+      const totalRent = occupancyRent(tenants.length || 1);
+      const tenantShare = tenants.length ? totalRent / tenants.length : totalRent;
       return `
         <tr>
           <td><strong>${escapeHtml(room.number)}</strong></td>
           <td>${escapeHtml(room.floor || "-")}</td>
           <td>${tenants.length}/${capacity}${room.capacity > MAX_TENANTS_PER_ROOM ? " (max 4)" : ""}<br>${roomOccupantsHtml(tenants)}</td>
-          <td><strong>${money(currentRent)}</strong><br><small>per tenant</small></td>
+          <td><strong>${money(totalRent)}</strong><br><small>${tenants.length || 1} tenant split: ${money(tenantShare)} each</small></td>
           <td>${money(room.deposit)}</td>
           <td>${escapeHtml(room.notes || "-")}</td>
           <td class="row-actions">
