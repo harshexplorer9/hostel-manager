@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#18251d" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Hostel Manager" />
+    <meta
+      name="description"
+      content="Manage hostel rooms, tenants, rent payments, room-wise electricity bills, and monthly dues."
+    />
+    <title>Hostel Manager</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/hostel-icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/hostel-icon.svg" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">HM</span>
+          <div>
+            <h1>Hostel Manager</h1>
+            <p>Room rent and electricity records</p>
+          </div>
+        </div>
+
+        <nav class="nav-list" aria-label="Main navigation">
+          <button class="nav-item active" data-view="dashboard">Dashboard</button>
+          <button class="nav-item" data-view="rooms">Rooms</button>
+          <button class="nav-item" data-view="tenants">Tenants</button>
+          <button class="nav-item" data-view="payments">Payments</button>
+          <button class="nav-item" data-view="electricity">Electricity</button>
+          <button class="nav-item" data-view="reports">Reports</button>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Hostel operations</p>
+            <h2 id="viewTitle">Dashboard</h2>
+          </div>
+          <div class="topbar-actions">
+            <input id="globalSearch" type="search" placeholder="Search tenant, room, phone..." />
+            <button id="openCloudSheet" class="secondary" type="button">Cloud Login</button>
+            <span id="cloudStatus" class="sync-pill">Local only</span>
+            <button id="exportData" class="secondary">Export</button>
+            <label class="secondary import-label" for="importData">Import</label>
+            <input id="importData" type="file" accept="application/json" />
+          </div>
+        </header>
+
+        <section id="dashboard" class="view active">
+          <div class="metric-grid">
+            <article class="metric">
+              <span>Total Rooms</span>
+              <strong id="totalRooms">0</strong>
+            </article>
+            <article class="metric">
+              <span>Occupied</span>
+              <strong id="occupiedRooms">0</strong>
+            </article>
+            <article class="metric">
+              <span>Monthly Rent</span>
+              <strong id="monthlyRent">₹0</strong>
+            </article>
+            <article class="metric warning">
+              <span>Pending Dues</span>
+              <strong id="pendingDues">₹0</strong>
+            </article>
+          </div>
+
+          <div class="dashboard-grid">
+            <section class="panel">
+              <div class="panel-head">
+                <h3>Room Status</h3>
+                <button class="text-button" data-view-link="rooms">Manage</button>
+              </div>
+              <div id="roomStatusList" class="status-list"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head">
+                <h3>Recent Activity</h3>
+                <button class="text-button" data-view-link="reports">View report</button>
+              </div>
+              <div id="activityList" class="activity-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="rooms" class="view">
+          <div class="content-grid">
+            <form id="roomForm" class="panel form-panel">
+              <h3>Add / Update Room</h3>
+              <input type="hidden" id="roomId" />
+              <label>Room Number<input id="roomNumber" required placeholder="101" /></label>
+              <label>Floor<input id="roomFloor" placeholder="Ground / 1st / 2nd" /></label>
+              <label>Capacity<input id="roomCapacity" type="number" min="1" value="1" /></label>
+              <label>Monthly Rent<input id="roomRent" type="number" min="0" required placeholder="5000" /></label>
+              <label>Deposit<input id="roomDeposit" type="number" min="0" placeholder="10000" /></label>
+              <label>Notes<textarea id="roomNotes" rows="3" placeholder="Attached bathroom, fan, cupboard..."></textarea></label>
+              <button type="submit">Save Room</button>
+              <button type="button" class="secondary" id="resetRoomForm">Clear</button>
+            </form>
+            <section class="panel list-panel">
+              <div class="panel-head">
+                <h3>Rooms</h3>
+                <span id="roomCount" class="pill">0 rooms</span>
+              </div>
+              <div id="roomsTable"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="tenants" class="view">
+          <div class="content-grid">
+            <form id="tenantForm" class="panel form-panel">
+              <h3>Add / Update Tenant</h3>
+              <input type="hidden" id="tenantId" />
+              <label>Tenant Name<input id="tenantName" required placeholder="Full name" /></label>
+              <label>Mobile Number<input id="tenantMobile" required placeholder="9876543210" /></label>
+              <label>Alternate Mobile<input id="tenantAltMobile" placeholder="Optional" /></label>
+              <label>Room<select id="tenantRoom" required></select></label>
+              <label>Joining Date<input id="tenantJoinDate" type="date" required /></label>
+              <label>ID Proof Type<input id="tenantIdType" placeholder="Aadhaar / PAN / Passport" /></label>
+              <label>ID Proof Number<input id="tenantIdNumber" placeholder="ID number" /></label>
+              <label>Guardian / Emergency Contact<input id="tenantEmergency" placeholder="Name and phone" /></label>
+              <label>Address<textarea id="tenantAddress" rows="3" placeholder="Permanent address"></textarea></label>
+              <label>Status<select id="tenantStatus"><option>Active</option><option>Left</option></select></label>
+              <button type="submit">Save Tenant</button>
+              <button type="button" class="secondary" id="resetTenantForm">Clear</button>
+            </form>
+            <section class="panel list-panel">
+              <div class="panel-head">
+                <h3>Tenants</h3>
+                <span id="tenantCount" class="pill">0 tenants</span>
+              </div>
+              <div id="tenantsTable"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="payments" class="view">
+          <div class="content-grid">
+            <form id="paymentForm" class="panel form-panel">
+              <h3>Record Rent Payment</h3>
+              <label>Tenant<select id="paymentTenant" required></select></label>
+              <label>Month<input id="paymentMonth" type="month" required /></label>
+              <label>Amount Paid<input id="paymentAmount" type="number" min="0" required /></label>
+              <label>Payment Date<input id="paymentDate" type="date" required /></label>
+              <label>Mode<select id="paymentMode"><option>Cash</option><option>UPI</option><option>Bank Transfer</option><option>Card</option></select></label>
+              <label>Remarks<textarea id="paymentRemarks" rows="3" placeholder="Receipt note"></textarea></label>
+              <button type="submit">Save Payment</button>
+            </form>
+            <section class="panel list-panel">
+              <div class="panel-head">
+                <h3>Rent Payments</h3>
+                <span id="paymentCount" class="pill">0 payments</span>
+              </div>
+              <div id="paymentsTable"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="electricity" class="view">
+          <div class="content-grid">
+            <form id="electricityForm" class="panel form-panel">
+              <h3>Record Electricity Bill</h3>
+              <label>Room<select id="electricityRoom" required></select></label>
+              <label>Month<input id="electricityMonth" type="month" required /></label>
+              <label>Previous Reading<input id="previousReading" type="number" min="0" required /></label>
+              <label>Current Reading<input id="currentReading" type="number" min="0" required /></label>
+              <label>Rate Per Unit<input id="unitRate" type="number" min="0" step="0.01" value="8" required /></label>
+              <label>Fixed Charge<input id="fixedCharge" type="number" min="0" value="0" /></label>
+              <div class="calculated-box">
+                <span>Units</span>
+                <strong id="calculatedUnits">0</strong>
+                <span>Bill Amount</span>
+                <strong id="calculatedBill">₹0</strong>
+              </div>
+              <button type="submit">Save Electricity Bill</button>
+            </form>
+            <section class="panel list-panel">
+              <div class="panel-head">
+                <h3>Electricity Bills</h3>
+                <span id="electricityCount" class="pill">0 bills</span>
+              </div>
+              <div id="electricityTable"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="reports" class="view">
+          <section class="panel">
+            <div class="panel-head">
+              <h3>Monthly Dues Report</h3>
+              <input id="reportMonth" type="month" />
+            </div>
+            <div id="reportsTable"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div id="iosInstallHint" class="install-hint" hidden>
+      <strong>Install on iPhone</strong>
+      <span>Open in Safari, tap Share, then Add to Home Screen.</span>
+      <button id="dismissInstallHint" type="button" aria-label="Dismiss install hint">x</button>
+    </div>
+
+    <div id="contactSheet" class="sheet-backdrop" hidden>
+      <div class="contact-sheet" role="dialog" aria-modal="true" aria-labelledby="contactSheetTitle">
+        <div>
+          <p class="eyebrow">Contact tenant</p>
+          <h3 id="contactSheetTitle">Choose an option</h3>
+          <p id="contactSheetDetails"></p>
+        </div>
+        <div class="sheet-actions">
+          <a id="callTenantLink" class="sheet-action" href="#">Call</a>
+          <a id="whatsappTenantLink" class="sheet-action whatsapp" href="#" target="_blank" rel="noopener">WhatsApp</a>
+          <button id="closeContactSheet" type="button" class="secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="cloudSheet" class="sheet-backdrop" hidden>
+      <div class="contact-sheet cloud-sheet" role="dialog" aria-modal="true" aria-labelledby="cloudSheetTitle">
+        <div>
+          <p class="eyebrow">Cloud sync</p>
+          <h3 id="cloudSheetTitle">Login to sync data</h3>
+          <p id="cloudSheetDetails">Use the same login on iPhone and laptop to keep hostel data synced.</p>
+        </div>
+        <form id="cloudLoginForm" class="cloud-form">
+          <label>Email<input id="cloudEmail" type="email" autocomplete="email" placeholder="owner@example.com" required /></label>
+          <label>Password<input id="cloudPassword" type="password" autocomplete="current-password" minlength="6" required /></label>
+          <div class="cloud-actions">
+            <button id="cloudSignIn" type="submit">Login</button>
+            <button id="cloudCreateAccount" type="button" class="secondary">Create Login</button>
+          </div>
+        </form>
+        <div class="cloud-actions">
+          <button id="cloudDownload" type="button" class="secondary">Download Cloud Data</button>
+          <button id="cloudUpload" type="button" class="secondary">Upload This Device</button>
+          <button id="cloudLogout" type="button" class="secondary">Logout</button>
+          <button id="closeCloudSheet" type="button" class="secondary">Close</button>
+        </div>
+        <p class="cloud-note" id="cloudConfigNote"></p>
+      </div>
+    </div>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script src="cloud-config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

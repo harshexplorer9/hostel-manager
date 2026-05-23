@@ -1,0 +1,20 @@
+{
+  "name": "Hostel Manager",
+  "short_name": "Hostel",
+  "description": "Manage hostel rooms, tenants, rent payments, electricity bills, and dues.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f7f4",
+  "theme_color": "#18251d",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icons/hostel-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "finance", "productivity"]
+}
