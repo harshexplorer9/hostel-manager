@@ -12,10 +12,10 @@
       content="Manage hostel rooms, tenants, rent payments, room-wise electricity bills, and monthly dues."
     />
     <title>Hostel Manager</title>
-    <link rel="manifest" href="manifest.webmanifest?v=9" />
+    <link rel="manifest" href="manifest.webmanifest?v=10" />
     <link rel="icon" href="icons/hostel-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icons/hostel-icon.svg" />
-    <link rel="stylesheet" href="styles.css?v=9" />
+    <link rel="stylesheet" href="styles.css?v=10" />
   </head>
   <body>
     <div class="app-shell">
@@ -125,6 +125,7 @@
               <label>Mobile Number<input id="tenantMobile" required placeholder="9876543210" /></label>
               <label>Alternate Mobile<input id="tenantAltMobile" placeholder="Optional" /></label>
               <label>Room<select id="tenantRoom" required></select></label>
+              <label>Tenant Monthly Rent<input id="tenantRent" type="number" min="0" placeholder="Leave blank to use room rent" /></label>
               <label>Joining Date<input id="tenantJoinDate" type="date" required /></label>
               <label>ID Proof Type<input id="tenantIdType" placeholder="Aadhaar / PAN / Passport" /></label>
               <label>ID Proof Number<input id="tenantIdNumber" placeholder="ID number" /></label>
@@ -259,6 +260,6 @@
         projectId: "hostel-manage-4ab56"
       };
     </script>
-    <script src="app.js?v=9"></script>
+    <script src="app.js?v=10"></script>
   </body>
 </html>

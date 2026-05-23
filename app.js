@@ -63,6 +63,7 @@ const els = {
   tenantMobile: document.querySelector("#tenantMobile"),
   tenantAltMobile: document.querySelector("#tenantAltMobile"),
   tenantRoom: document.querySelector("#tenantRoom"),
+  tenantRent: document.querySelector("#tenantRent"),
   tenantJoinDate: document.querySelector("#tenantJoinDate"),
   tenantIdType: document.querySelector("#tenantIdType"),
   tenantIdNumber: document.querySelector("#tenantIdNumber"),
@@ -225,6 +226,12 @@ function findTenant(tenantId) {
 function tenantRoomLabel(tenant) {
   const room = findRoom(tenant.roomId);
   return room ? `Room ${room.number}` : "No room";
+}
+
+function tenantRentAmount(tenant) {
+  const tenantRent = Number(tenant.rent);
+  if (Number.isFinite(tenantRent) && tenantRent > 0) return tenantRent;
+  return Number(findRoom(tenant.roomId)?.rent || 0);
 }
 
 function buildGeneralMessage(tenant) {
@@ -585,7 +592,7 @@ function renderTenants() {
   const tenants = data.tenants.filter(tenantMatchesSearch);
   els.tenantCount.textContent = `${tenants.length} tenants`;
   els.tenantsTable.innerHTML = table(
-    ["Name", "Mobile", "Room", "Joining", "ID Proof", "Emergency", "Status", "Actions"],
+    ["Name", "Mobile", "Room", "Rent", "Joining", "ID Proof", "Emergency", "Status", "Actions"],
     tenants.map(
       (tenant) => `
       <tr>
@@ -598,6 +605,7 @@ function renderTenants() {
           </div>
         </td>
         <td>${escapeHtml(tenantRoomLabel(tenant))}</td>
+        <td>${money(tenantRentAmount(tenant))}</td>
         <td>${escapeHtml(tenant.joinDate)}</td>
         <td>${escapeHtml(tenant.idType || "-")}<br><small>${escapeHtml(tenant.idNumber || "")}</small></td>
         <td>${escapeHtml(tenant.emergency || "-")}</td>
@@ -680,7 +688,7 @@ function renderElectricity() {
 function getMonthlyReport(month) {
   return activeTenants().map((tenant) => {
     const room = findRoom(tenant.roomId);
-    const rentDue = Number(room?.rent || 0);
+    const rentDue = tenantRentAmount(tenant);
     const rentPaid = data.payments
       .filter((payment) => payment.tenantId === tenant.id && payment.month === month)
       .reduce((sum, payment) => sum + Number(payment.amount), 0);
@@ -768,6 +776,7 @@ function resetRoomForm() {
 function resetTenantForm() {
   els.tenantForm.reset();
   els.tenantId.value = "";
+  els.tenantRent.value = "";
   els.tenantJoinDate.value = today();
   els.tenantStatus.value = "Active";
 }
@@ -824,6 +833,7 @@ els.tenantForm.addEventListener("submit", (event) => {
     mobile: els.tenantMobile.value.trim(),
     altMobile: els.tenantAltMobile.value.trim(),
     roomId: els.tenantRoom.value,
+    rent: Number(els.tenantRent.value) || 0,
     joinDate: els.tenantJoinDate.value,
     idType: els.tenantIdType.value.trim(),
     idNumber: els.tenantIdNumber.value.trim(),
@@ -1012,6 +1022,7 @@ document.addEventListener("click", (event) => {
     els.tenantMobile.value = tenant.mobile;
     els.tenantAltMobile.value = tenant.altMobile;
     els.tenantRoom.value = tenant.roomId;
+    els.tenantRent.value = tenant.rent || "";
     els.tenantJoinDate.value = tenant.joinDate;
     els.tenantIdType.value = tenant.idType;
     els.tenantIdNumber.value = tenant.idNumber;
