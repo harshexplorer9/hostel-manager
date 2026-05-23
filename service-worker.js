@@ -1,10 +1,9 @@
-const CACHE_NAME = "hostel-manager-v8";
+const CACHE_NAME = "hostel-manager-v9";
 const APP_ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
-  "./cloud-config.js",
   "./manifest.webmanifest",
   "./icons/hostel-icon.svg"
 ];

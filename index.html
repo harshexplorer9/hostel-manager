@@ -12,10 +12,10 @@
       content="Manage hostel rooms, tenants, rent payments, room-wise electricity bills, and monthly dues."
     />
     <title>Hostel Manager</title>
-    <link rel="manifest" href="manifest.webmanifest?v=8" />
+    <link rel="manifest" href="manifest.webmanifest?v=9" />
     <link rel="icon" href="icons/hostel-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icons/hostel-icon.svg" />
-    <link rel="stylesheet" href="styles.css?v=8" />
+    <link rel="stylesheet" href="styles.css?v=9" />
   </head>
   <body>
     <div class="app-shell">
@@ -253,7 +253,12 @@
     </div>
 
     <div id="toast" role="status" aria-live="polite"></div>
-    <script src="cloud-config.js?v=8"></script>
-    <script src="app.js?v=8"></script>
+    <script>
+      window.HOSTEL_CLOUD_CONFIG = {
+        apiKey: "AIzaSyDu9lzxmbg_bbuy_wi_-laJCjoZnhRvIRU",
+        projectId: "hostel-manage-4ab56"
+      };
+    </script>
+    <script src="app.js?v=9"></script>
   </body>
 </html>
