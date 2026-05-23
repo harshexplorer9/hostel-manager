@@ -12,10 +12,10 @@
       content="Manage hostel rooms, tenants, rent payments, room-wise electricity bills, and monthly dues."
     />
     <title>Hostel Manager</title>
-    <link rel="manifest" href="manifest.webmanifest?v=10" />
+    <link rel="manifest" href="manifest.webmanifest?v=11" />
     <link rel="icon" href="icons/hostel-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icons/hostel-icon.svg" />
-    <link rel="stylesheet" href="styles.css?v=10" />
+    <link rel="stylesheet" href="styles.css?v=11" />
   </head>
   <body>
     <div class="app-shell">
@@ -99,7 +99,7 @@
               <input type="hidden" id="roomId" />
               <label>Room Number<input id="roomNumber" required placeholder="101" /></label>
               <label>Floor<input id="roomFloor" placeholder="Ground / 1st / 2nd" /></label>
-              <label>Capacity<input id="roomCapacity" type="number" min="1" value="1" /></label>
+              <label>Capacity Max 4<input id="roomCapacity" type="number" min="1" max="4" value="1" /></label>
               <label>Monthly Rent<input id="roomRent" type="number" min="0" required placeholder="5000" /></label>
               <label>Deposit<input id="roomDeposit" type="number" min="0" placeholder="10000" /></label>
               <label>Notes<textarea id="roomNotes" rows="3" placeholder="Attached bathroom, fan, cupboard..."></textarea></label>
@@ -260,6 +260,6 @@
         projectId: "hostel-manage-4ab56"
       };
     </script>
-    <script src="app.js?v=10"></script>
+    <script src="app.js?v=11"></script>
   </body>
 </html>

@@ -2,6 +2,7 @@ const STORAGE_KEY = "hostel-manager-data-v1";
 const INSTALL_HINT_KEY = "hostel-manager-install-hint-dismissed";
 const AUTH_STORAGE_KEY = "hostel-manager-auth-v1";
 const CLOUD_CONFIG = window.HOSTEL_CLOUD_CONFIG || {};
+const MAX_TENANTS_PER_ROOM = 4;
 
 const defaultData = {
   rooms: [
@@ -215,6 +216,10 @@ function roomTenants(roomId) {
   return activeTenants().filter((tenant) => tenant.roomId === roomId);
 }
 
+function roomCapacity(room) {
+  return Math.min(Math.max(Number(room?.capacity) || 1, 1), MAX_TENANTS_PER_ROOM);
+}
+
 function findRoom(roomId) {
   return data.rooms.find((room) => room.id === roomId);
 }
@@ -232,6 +237,25 @@ function tenantRentAmount(tenant) {
   const tenantRent = Number(tenant.rent);
   if (Number.isFinite(tenantRent) && tenantRent > 0) return tenantRent;
   return Number(findRoom(tenant.roomId)?.rent || 0);
+}
+
+function roomOccupantsHtml(tenants) {
+  if (!tenants.length) return "<small>Vacant</small>";
+
+  return `
+    <div class="occupant-list">
+      ${tenants
+        .map(
+          (tenant, index) => `
+            <div>
+              <strong>${index + 1}. ${escapeHtml(tenant.name)}</strong>
+              <small>ID: ${escapeHtml(tenant.idNumber || "Not added")} | Rent: ${money(tenantRentAmount(tenant))}</small>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
 }
 
 function buildGeneralMessage(tenant) {
@@ -479,7 +503,8 @@ function renderRoomOptions() {
     .sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }))
     .map((room) => {
       const tenants = roomTenants(room.id).length;
-      const label = `${room.number} - ${tenants}/${room.capacity} occupied`;
+      const capacity = roomCapacity(room);
+      const label = `${room.number} - ${tenants}/${capacity} occupied`;
       return `<option value="${room.id}">${escapeHtml(label)}</option>`;
     })
     .join("");
@@ -500,7 +525,7 @@ function renderTenantOptions() {
 
 function renderDashboard() {
   const occupied = data.rooms.filter((room) => roomTenants(room.id).length > 0).length;
-  const monthlyRent = activeTenants().reduce((sum, tenant) => sum + Number(findRoom(tenant.roomId)?.rent || 0), 0);
+  const monthlyRent = activeTenants().reduce((sum, tenant) => sum + tenantRentAmount(tenant), 0);
   const report = getMonthlyReport(els.reportMonth.value || thisMonth());
   const pending = report.reduce((sum, row) => sum + row.balance, 0);
 
@@ -514,11 +539,12 @@ function renderDashboard() {
       .slice(0, 8)
       .map((room) => {
         const count = roomTenants(room.id).length;
-        const status = count >= room.capacity ? "Full" : count > 0 ? "Partial" : "Vacant";
+        const capacity = roomCapacity(room);
+        const status = count >= capacity ? "Full" : count > 0 ? "Partial" : "Vacant";
         const badgeClass = status === "Full" ? "red" : status === "Partial" ? "orange" : "green";
         return `
           <div class="status-item">
-            <div><strong>Room ${escapeHtml(room.number)}</strong><span>${count}/${room.capacity} tenants, ${money(room.rent)}/month</span></div>
+            <div><strong>Room ${escapeHtml(room.number)}</strong><span>${count}/${capacity} tenants, ${money(room.rent)}/month default</span></div>
             <span class="badge ${badgeClass}">${status}</span>
           </div>
         `;
@@ -569,11 +595,12 @@ function renderRooms() {
     ["Room", "Floor", "Occupancy", "Rent", "Deposit", "Notes", "Actions"],
     rooms.map((room) => {
       const tenants = roomTenants(room.id);
+      const capacity = roomCapacity(room);
       return `
         <tr>
           <td><strong>${escapeHtml(room.number)}</strong></td>
           <td>${escapeHtml(room.floor || "-")}</td>
-          <td>${tenants.length}/${room.capacity}<br><small>${escapeHtml(tenants.map((tenant) => tenant.name).join(", ") || "Vacant")}</small></td>
+          <td>${tenants.length}/${capacity}${room.capacity > MAX_TENANTS_PER_ROOM ? " (max 4)" : ""}<br>${roomOccupantsHtml(tenants)}</td>
           <td>${money(room.rent)}</td>
           <td>${money(room.deposit)}</td>
           <td>${escapeHtml(room.notes || "-")}</td>
@@ -798,11 +825,17 @@ els.roomForm.addEventListener("submit", (event) => {
     id: existing?.id || crypto.randomUUID(),
     number: els.roomNumber.value.trim(),
     floor: els.roomFloor.value.trim(),
-    capacity: Number(els.roomCapacity.value) || 1,
+    capacity: Math.min(Math.max(Number(els.roomCapacity.value) || 1, 1), MAX_TENANTS_PER_ROOM),
     rent: Number(els.roomRent.value) || 0,
     deposit: Number(els.roomDeposit.value) || 0,
     notes: els.roomNotes.value.trim()
   };
+
+  const assignedTenants = existing ? roomTenants(existing.id).length : 0;
+  if (assignedTenants > room.capacity) {
+    toast(`Room already has ${assignedTenants} active tenants`);
+    return;
+  }
 
   if (existing) {
     Object.assign(existing, room);
@@ -827,6 +860,13 @@ els.tenantForm.addEventListener("submit", (event) => {
   }
 
   const existing = data.tenants.find((tenant) => tenant.id === els.tenantId.value);
+  const selectedRoom = findRoom(els.tenantRoom.value);
+  const selectedRoomTenants = roomTenants(els.tenantRoom.value).filter((tenant) => tenant.id !== existing?.id);
+  if (els.tenantStatus.value === "Active" && selectedRoomTenants.length >= roomCapacity(selectedRoom)) {
+    toast(`Room ${selectedRoom?.number || ""} is full. Max ${roomCapacity(selectedRoom)} tenants allowed.`);
+    return;
+  }
+
   const tenant = {
     id: existing?.id || crypto.randomUUID(),
     name: els.tenantName.value.trim(),

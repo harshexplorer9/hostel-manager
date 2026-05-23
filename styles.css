@@ -407,6 +407,28 @@ td {
   gap: 4px;
 }
 
+.occupant-list {
+  display: grid;
+  gap: 6px;
+  min-width: 190px;
+}
+
+.occupant-list div {
+  background: var(--surface-muted);
+  border-radius: 7px;
+  padding: 8px;
+}
+
+.occupant-list strong,
+.occupant-list small {
+  display: block;
+}
+
+.occupant-list small {
+  color: var(--muted);
+  margin-top: 2px;
+}
+
 .sheet-backdrop {
   align-items: end;
   background: rgba(18, 29, 23, 0.45);
