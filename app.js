@@ -90,7 +90,7 @@ const els = {
   tenantsTable: document.querySelector("#tenantsTable"),
   tenantCount: document.querySelector("#tenantCount"),
   paymentForm: document.querySelector("#paymentForm"),
-  paymentTenant: document.querySelector("#paymentTenant"),
+  paymentRoom: document.querySelector("#paymentRoom"),
   paymentMonth: document.querySelector("#paymentMonth"),
   paymentAmount: document.querySelector("#paymentAmount"),
   paymentDate: document.querySelector("#paymentDate"),
@@ -313,13 +313,24 @@ function buildDueMessage(row, month) {
   ].join("\n");
 }
 
-function buildPaymentSlipMessage(payment) {
+function paymentRoom(payment) {
+  if (payment.roomId) return findRoom(payment.roomId);
   const tenant = findTenant(payment.tenantId);
-  const room = tenant ? findRoom(tenant.roomId) : null;
+  return tenant ? findRoom(tenant.roomId) : null;
+}
+
+function paymentTenants(payment) {
+  if (payment.roomId) return roomTenants(payment.roomId);
+  const tenant = findTenant(payment.tenantId);
+  return tenant ? [tenant] : [];
+}
+
+function buildPaymentSlipMessage(payment, tenant) {
+  const room = paymentRoom(payment);
 
   return [
     "Hostel Payment Slip",
-    `Tenant: ${tenant?.name || "Deleted tenant"}`,
+    tenant ? `Tenant: ${tenant.name}` : "",
     `Room: ${room?.number || "-"}`,
     `Month: ${payment.month}`,
     `Amount paid: ${money(payment.amount)}`,
@@ -570,19 +581,16 @@ function renderRoomOptions() {
 
   els.tenantRoom.innerHTML = roomOptions || '<option value="">Add a room first</option>';
   els.electricityRoom.innerHTML = roomOptions || '<option value="">Add a room first</option>';
+  els.paymentRoom.innerHTML = roomOptions || '<option value="">Add a room first</option>';
 }
 
 function renderTenantOptions() {
-  const options = activeTenants()
+  return activeTenants()
     .slice()
     .sort((a, b) => {
       const roomSort = tenantRoomLabel(a).localeCompare(tenantRoomLabel(b), undefined, { numeric: true });
       return roomSort || a.name.localeCompare(b.name);
-    })
-    .map((tenant) => `<option value="${tenant.id}">${escapeHtml(tenantRoomLabel(tenant))} - ${escapeHtml(tenant.name)}</option>`)
-    .join("");
-
-  els.paymentTenant.innerHTML = options || '<option value="">Add an active tenant first</option>';
+    });
 }
 
 function renderRentSettings() {
@@ -592,9 +600,12 @@ function renderRentSettings() {
   els.rentFor4.value = occupancyRent(4);
 }
 
-function fillPaymentAmountFromTenant() {
-  const tenant = findTenant(els.paymentTenant.value);
-  if (tenant) els.paymentAmount.value = tenantRentAmount(tenant);
+function roomRentTotal(roomId) {
+  return roomTenants(roomId).reduce((sum, tenant) => sum + tenantRentAmount(tenant), 0);
+}
+
+function fillPaymentAmountFromRoom() {
+  if (els.paymentRoom.value) els.paymentAmount.value = roomRentTotal(els.paymentRoom.value);
 }
 
 function renderDashboard() {
@@ -629,7 +640,7 @@ function renderDashboard() {
     ...data.payments.map((item) => ({
       date: item.date,
       title: `Rent received: ${money(item.amount)}`,
-      sub: `${findTenant(item.tenantId)?.name || "Tenant"} for ${item.month}`
+      sub: `${item.roomId ? `Room ${paymentRoom(item)?.number || ""}` : findTenant(item.tenantId)?.name || "Tenant"} for ${item.month}`
     })),
     ...data.electricity.map((item) => ({
       date: item.createdAt,
@@ -734,8 +745,7 @@ function renderPayments() {
 
   const grouped = new Map();
   payments.forEach((payment) => {
-    const tenant = findTenant(payment.tenantId);
-    const room = tenant ? findRoom(tenant.roomId) : null;
+    const room = paymentRoom(payment);
     const key = room?.id || "deleted-room";
     if (!grouped.has(key)) {
       grouped.set(key, {
@@ -743,7 +753,7 @@ function renderPayments() {
         payments: []
       });
     }
-    grouped.get(key).payments.push({ payment, tenant });
+    grouped.get(key).payments.push({ payment, tenants: paymentTenants(payment) });
   });
 
   els.paymentsTable.innerHTML = Array.from(grouped.values())
@@ -756,17 +766,22 @@ function renderPayments() {
             <span>${group.payments.length} payments | ${money(total)}</span>
           </div>
           ${table(
-            ["Tenant", "Month", "Amount", "Date", "Mode", "Remarks", "Slip"],
-            group.payments.map(({ payment, tenant }) => `
+            ["Room Tenants", "Month", "Amount", "Date", "Mode", "Remarks", "Slip"],
+            group.payments.map(({ payment, tenants }) => `
               <tr>
-                <td><strong>${escapeHtml(tenant?.name || "Deleted tenant")}</strong><br><small>${escapeHtml(tenant?.mobile || "")}</small></td>
+                <td>${tenants.length ? tenants.map((tenant) => `<strong>${escapeHtml(tenant.name)}</strong><br><small>${escapeHtml(tenant.mobile || "")}</small>`).join("<hr>") : "No active tenant"}</td>
                 <td>${escapeHtml(payment.month)}</td>
                 <td>${money(payment.amount)}</td>
                 <td>${escapeHtml(payment.date)}</td>
                 <td>${escapeHtml(payment.mode)}</td>
                 <td>${escapeHtml(payment.remarks || "-")}</td>
                 <td class="row-actions">
-                  <button data-payment-slip="${payment.id}" ${tenant?.mobile ? "" : "disabled"}>WhatsApp Slip</button>
+                  ${tenants
+                    .map(
+                      (tenant) =>
+                        `<button data-payment-slip="${payment.id}" data-payment-slip-tenant="${tenant.id}" ${tenant.mobile ? "" : "disabled"}>${escapeHtml(tenant.name)} Slip</button>`
+                    )
+                    .join("")}
                   <button class="danger" data-delete-payment="${payment.id}">Delete</button>
                 </td>
               </tr>
@@ -821,13 +836,18 @@ function getMonthlyReport(month) {
   return activeTenants().map((tenant) => {
     const room = findRoom(tenant.roomId);
     const rentDue = tenantRentAmount(tenant);
-    const rentPaid = data.payments
+    const tenantDirectPaid = data.payments
       .filter((payment) => payment.tenantId === tenant.id && payment.month === month)
+      .reduce((sum, payment) => sum + Number(payment.amount), 0);
+    const roomPaymentTotal = data.payments
+      .filter((payment) => payment.roomId === tenant.roomId && payment.month === month)
       .reduce((sum, payment) => sum + Number(payment.amount), 0);
     const electricityDue = data.electricity
       .filter((bill) => bill.roomId === tenant.roomId && bill.month === month)
       .reduce((sum, bill) => sum + Number(bill.amount), 0);
     const roomActiveTenants = Math.max(roomTenants(tenant.roomId).length, 1);
+    const roomPaidShare = roomPaymentTotal / roomActiveTenants;
+    const rentPaid = tenantDirectPaid + roomPaidShare;
     const tenantElectricity = electricityDue / roomActiveTenants;
     const totalDue = rentDue + tenantElectricity;
 
@@ -1116,14 +1136,14 @@ els.cloudLogout.addEventListener("click", () => {
 
 els.paymentForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  if (!els.paymentTenant.value) {
-    toast("Add an active tenant before recording payment");
+  if (!els.paymentRoom.value) {
+    toast("Add a room before recording payment");
     return;
   }
 
   data.payments.push({
     id: crypto.randomUUID(),
-    tenantId: els.paymentTenant.value,
+    roomId: els.paymentRoom.value,
     month: els.paymentMonth.value,
     amount: Number(els.paymentAmount.value) || 0,
     date: els.paymentDate.value,
@@ -1139,7 +1159,7 @@ els.paymentForm.addEventListener("submit", (event) => {
   renderAll();
 });
 
-els.paymentTenant.addEventListener("change", fillPaymentAmountFromTenant);
+els.paymentRoom.addEventListener("change", fillPaymentAmountFromRoom);
 
 ["input", "change"].forEach((eventName) => {
   [els.previousReading, els.currentReading, els.unitRate, els.fixedCharge].forEach((input) => {
@@ -1215,8 +1235,8 @@ document.addEventListener("click", (event) => {
   const paymentSlipId = target.dataset.paymentSlip;
   if (paymentSlipId) {
     const payment = data.payments.find((item) => item.id === paymentSlipId);
-    const tenant = payment ? findTenant(payment.tenantId) : null;
-    if (payment && tenant) openContactSheet(tenant, buildPaymentSlipMessage(payment));
+    const tenant = target.dataset.paymentSlipTenant ? findTenant(target.dataset.paymentSlipTenant) : null;
+    if (payment && tenant) openContactSheet(tenant, buildPaymentSlipMessage(payment, tenant));
   }
 
   const editRoomId = target.dataset.editRoom;

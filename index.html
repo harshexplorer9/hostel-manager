@@ -12,10 +12,10 @@
       content="Manage hostel rooms, tenants, rent payments, room-wise electricity bills, and monthly dues."
     />
     <title>Hostel Manager</title>
-    <link rel="manifest" href="manifest.webmanifest?v=13" />
+    <link rel="manifest" href="manifest.webmanifest?v=14" />
     <link rel="icon" href="icons/hostel-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icons/hostel-icon.svg" />
-    <link rel="stylesheet" href="styles.css?v=13" />
+    <link rel="stylesheet" href="styles.css?v=14" />
   </head>
   <body>
     <div class="app-shell">
@@ -162,7 +162,7 @@
           <div class="content-grid">
             <form id="paymentForm" class="panel form-panel">
               <h3>Record Rent Payment</h3>
-              <label>Tenant<select id="paymentTenant" required></select></label>
+              <label>Room<select id="paymentRoom" required></select></label>
               <label>Month<input id="paymentMonth" type="month" required /></label>
               <label>Amount Paid<input id="paymentAmount" type="number" min="0" required /></label>
               <label>Payment Date<input id="paymentDate" type="date" required /></label>
@@ -274,6 +274,6 @@
         projectId: "hostel-manage-4ab56"
       };
     </script>
-    <script src="app.js?v=13"></script>
+    <script src="app.js?v=14"></script>
   </body>
 </html>
