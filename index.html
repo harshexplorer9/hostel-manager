@@ -12,10 +12,10 @@
       content="Manage hostel rooms, tenants, rent payments, room-wise electricity bills, and monthly dues."
     />
     <title>Hostel Manager</title>
-    <link rel="manifest" href="manifest.webmanifest?v=11" />
+    <link rel="manifest" href="manifest.webmanifest?v=12" />
     <link rel="icon" href="icons/hostel-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icons/hostel-icon.svg" />
-    <link rel="stylesheet" href="styles.css?v=11" />
+    <link rel="stylesheet" href="styles.css?v=12" />
   </head>
   <body>
     <div class="app-shell">
@@ -175,7 +175,8 @@
               <label>Month<input id="electricityMonth" type="month" required /></label>
               <label>Previous Reading<input id="previousReading" type="number" min="0" required /></label>
               <label>Current Reading<input id="currentReading" type="number" min="0" required /></label>
-              <label>Rate Per Unit<input id="unitRate" type="number" min="0" step="0.01" value="8" required /></label>
+              <label>Rate Per Unit<input id="unitRate" type="number" min="0" step="0.01" value="8.5" required /></label>
+              <button type="button" class="secondary" id="saveDefaultRate">Save as Default Rate</button>
               <label>Fixed Charge<input id="fixedCharge" type="number" min="0" value="0" /></label>
               <div class="calculated-box">
                 <span>Units</span>
@@ -260,6 +261,6 @@
         projectId: "hostel-manage-4ab56"
       };
     </script>
-    <script src="app.js?v=11"></script>
+    <script src="app.js?v=12"></script>
   </body>
 </html>

@@ -5,6 +5,9 @@ const CLOUD_CONFIG = window.HOSTEL_CLOUD_CONFIG || {};
 const MAX_TENANTS_PER_ROOM = 4;
 
 const defaultData = {
+  settings: {
+    electricityRate: 8.5
+  },
   rooms: [
     {
       id: crypto.randomUUID(),
@@ -34,6 +37,7 @@ let data = loadData();
 let currentSearch = "";
 let cloudAuth = loadAuth();
 let syncTimer;
+ensureSettings();
 
 const els = {
   viewTitle: document.querySelector("#viewTitle"),
@@ -89,6 +93,7 @@ const els = {
   previousReading: document.querySelector("#previousReading"),
   currentReading: document.querySelector("#currentReading"),
   unitRate: document.querySelector("#unitRate"),
+  saveDefaultRate: document.querySelector("#saveDefaultRate"),
   fixedCharge: document.querySelector("#fixedCharge"),
   calculatedUnits: document.querySelector("#calculatedUnits"),
   calculatedBill: document.querySelector("#calculatedBill"),
@@ -162,6 +167,15 @@ function money(value) {
     currency: "INR",
     maximumFractionDigits: 0
   }).format(Number(value) || 0);
+}
+
+function electricityRate() {
+  const rate = Number(data.settings?.electricityRate);
+  return Number.isFinite(rate) && rate > 0 ? rate : 8.5;
+}
+
+function ensureSettings() {
+  data.settings = { ...structuredClone(defaultData.settings), ...(data.settings || {}) };
 }
 
 function today() {
@@ -273,6 +287,25 @@ function buildDueMessage(row, month) {
     `Total balance: ${money(row.balance)}`,
     "Please clear the due amount as soon as possible."
   ].join("\n");
+}
+
+function buildPaymentSlipMessage(payment) {
+  const tenant = findTenant(payment.tenantId);
+  const room = tenant ? findRoom(tenant.roomId) : null;
+
+  return [
+    "Hostel Payment Slip",
+    `Tenant: ${tenant?.name || "Deleted tenant"}`,
+    `Room: ${room?.number || "-"}`,
+    `Month: ${payment.month}`,
+    `Amount paid: ${money(payment.amount)}`,
+    `Payment date: ${payment.date}`,
+    `Mode: ${payment.mode}`,
+    payment.remarks ? `Remarks: ${payment.remarks}` : "",
+    "Thank you."
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function openContactSheet(tenant, message) {
@@ -455,7 +488,9 @@ async function downloadCloudData(uploadIfEmpty = false) {
   const remoteData = body.fields?.hostelData?.stringValue;
   if (remoteData) {
     data = { ...structuredClone(defaultData), ...JSON.parse(remoteData) };
+    ensureSettings();
     saveData(true);
+    els.unitRate.value = electricityRate();
     renderAll();
     toast("Cloud data loaded");
   }
@@ -516,8 +551,11 @@ function renderRoomOptions() {
 function renderTenantOptions() {
   const options = activeTenants()
     .slice()
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map((tenant) => `<option value="${tenant.id}">${escapeHtml(tenant.name)} - ${escapeHtml(tenantRoomLabel(tenant))}</option>`)
+    .sort((a, b) => {
+      const roomSort = tenantRoomLabel(a).localeCompare(tenantRoomLabel(b), undefined, { numeric: true });
+      return roomSort || a.name.localeCompare(b.name);
+    })
+    .map((tenant) => `<option value="${tenant.id}">${escapeHtml(tenantRoomLabel(tenant))} - ${escapeHtml(tenant.name)}</option>`)
     .join("");
 
   els.paymentTenant.innerHTML = options || '<option value="">Add an active tenant first</option>';
@@ -649,29 +687,59 @@ function renderTenants() {
 }
 
 function renderPayments() {
-  els.paymentCount.textContent = `${data.payments.length} payments`;
-  els.paymentsTable.innerHTML = table(
-    ["Tenant", "Room", "Month", "Amount", "Date", "Mode", "Remarks", "Actions"],
-    data.payments
-      .slice()
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
-      .map((payment) => {
-        const tenant = findTenant(payment.tenantId);
-        return `
-          <tr>
-            <td>${escapeHtml(tenant?.name || "Deleted tenant")}</td>
-            <td>${escapeHtml(tenant ? tenantRoomLabel(tenant) : "-")}</td>
-            <td>${escapeHtml(payment.month)}</td>
-            <td>${money(payment.amount)}</td>
-            <td>${escapeHtml(payment.date)}</td>
-            <td>${escapeHtml(payment.mode)}</td>
-            <td>${escapeHtml(payment.remarks || "-")}</td>
-            <td class="row-actions"><button class="danger" data-delete-payment="${payment.id}">Delete</button></td>
-          </tr>
-        `;
-      }),
-    "No payments recorded."
-  );
+  const payments = data.payments.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+  els.paymentCount.textContent = `${payments.length} payments`;
+
+  if (!payments.length) {
+    els.paymentsTable.innerHTML = '<div class="empty">No payments recorded.</div>';
+    return;
+  }
+
+  const grouped = new Map();
+  payments.forEach((payment) => {
+    const tenant = findTenant(payment.tenantId);
+    const room = tenant ? findRoom(tenant.roomId) : null;
+    const key = room?.id || "deleted-room";
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        roomNumber: room?.number || "Deleted room",
+        payments: []
+      });
+    }
+    grouped.get(key).payments.push({ payment, tenant });
+  });
+
+  els.paymentsTable.innerHTML = Array.from(grouped.values())
+    .map((group) => {
+      const total = group.payments.reduce((sum, item) => sum + Number(item.payment.amount || 0), 0);
+      return `
+        <section class="room-report">
+          <div class="room-report-head">
+            <strong>Room ${escapeHtml(group.roomNumber)}</strong>
+            <span>${group.payments.length} payments | ${money(total)}</span>
+          </div>
+          ${table(
+            ["Tenant", "Month", "Amount", "Date", "Mode", "Remarks", "Slip"],
+            group.payments.map(({ payment, tenant }) => `
+              <tr>
+                <td><strong>${escapeHtml(tenant?.name || "Deleted tenant")}</strong><br><small>${escapeHtml(tenant?.mobile || "")}</small></td>
+                <td>${escapeHtml(payment.month)}</td>
+                <td>${money(payment.amount)}</td>
+                <td>${escapeHtml(payment.date)}</td>
+                <td>${escapeHtml(payment.mode)}</td>
+                <td>${escapeHtml(payment.remarks || "-")}</td>
+                <td class="row-actions">
+                  <button data-payment-slip="${payment.id}" ${tenant?.mobile ? "" : "disabled"}>WhatsApp Slip</button>
+                  <button class="danger" data-delete-payment="${payment.id}">Delete</button>
+                </td>
+              </tr>
+            `),
+            "No payments recorded."
+          )}
+        </section>
+      `;
+    })
+    .join("");
 }
 
 function calculateElectricity() {
@@ -741,27 +809,74 @@ function getMonthlyReport(month) {
 function renderReports() {
   const month = els.reportMonth.value || thisMonth();
   const rows = getMonthlyReport(month);
-  els.reportsTable.innerHTML = table(
-    ["Tenant", "Room", "Rent Due", "Electricity Share", "Paid", "Balance", "Send Due"],
-    rows.map(
-      (row) => `
-      <tr>
-        <td><strong>${escapeHtml(row.tenant.name)}</strong><br><small>${escapeHtml(row.tenant.mobile)}</small></td>
-        <td>${escapeHtml(row.room?.number || "-")}</td>
-        <td>${money(row.rentDue)}</td>
-        <td>${money(row.electricityDue)}</td>
-        <td>${money(row.rentPaid)}</td>
-        <td><strong>${money(row.balance)}</strong></td>
-        <td>
-          <button class="due-button" data-due-tenant="${row.tenant.id}" ${row.balance <= 0 ? "disabled" : ""}>
-            WhatsApp Due
-          </button>
-        </td>
-      </tr>
-    `
-    ),
-    `No active tenants for ${month}.`
-  );
+
+  if (!rows.length) {
+    els.reportsTable.innerHTML = `<div class="empty">No active tenants for ${month}.</div>`;
+    return;
+  }
+
+  const grouped = new Map();
+  rows.forEach((row) => {
+    const key = row.room?.id || "no-room";
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        roomNumber: row.room?.number || "-",
+        rows: []
+      });
+    }
+    grouped.get(key).rows.push(row);
+  });
+
+  els.reportsTable.innerHTML = Array.from(grouped.values())
+    .sort((a, b) => a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }))
+    .map((group) => {
+      const rentTotal = group.rows.reduce((sum, row) => sum + row.rentDue, 0);
+      const electricityTotal = group.rows.reduce((sum, row) => sum + row.electricityDue, 0);
+      const paidTotal = group.rows.reduce((sum, row) => sum + row.rentPaid, 0);
+      const balanceTotal = group.rows.reduce((sum, row) => sum + row.balance, 0);
+
+      return `
+        <section class="room-report">
+          <div class="room-report-head">
+            <strong>Room ${escapeHtml(group.roomNumber)}</strong>
+            <span>Balance ${money(balanceTotal)}</span>
+          </div>
+          ${table(
+            ["Tenant", "Rent Due", "Electricity", "Paid", "Balance", "Send Due"],
+            [
+              ...group.rows.map(
+                (row) => `
+                <tr>
+                  <td><strong>${escapeHtml(row.tenant.name)}</strong><br><small>${escapeHtml(row.tenant.mobile)}</small></td>
+                  <td>${money(row.rentDue)}</td>
+                  <td>${money(row.electricityDue)}</td>
+                  <td>${money(row.rentPaid)}</td>
+                  <td><strong>${money(row.balance)}</strong></td>
+                  <td>
+                    <button class="due-button" data-due-tenant="${row.tenant.id}" ${row.balance <= 0 ? "disabled" : ""}>
+                      WhatsApp Due
+                    </button>
+                  </td>
+                </tr>
+              `
+              ),
+              `
+                <tr class="total-row">
+                  <td><strong>Room Total</strong></td>
+                  <td>${money(rentTotal)}</td>
+                  <td>${money(electricityTotal)}</td>
+                  <td>${money(paidTotal)}</td>
+                  <td><strong>${money(balanceTotal)}</strong></td>
+                  <td></td>
+                </tr>
+              `
+            ],
+            `No active tenants for ${month}.`
+          )}
+        </section>
+      `;
+    })
+    .join("");
 }
 
 function renderAll() {
@@ -1002,11 +1117,25 @@ els.electricityForm.addEventListener("submit", (event) => {
   saveData();
   els.electricityForm.reset();
   els.electricityMonth.value = thisMonth();
-  els.unitRate.value = 8;
+  els.unitRate.value = electricityRate();
   els.fixedCharge.value = 0;
   calculateElectricity();
   toast("Electricity bill recorded");
   renderAll();
+});
+
+els.saveDefaultRate.addEventListener("click", () => {
+  const rate = Number(els.unitRate.value);
+  if (!Number.isFinite(rate) || rate <= 0) {
+    toast("Enter a valid electricity rate first");
+    return;
+  }
+
+  ensureSettings();
+  data.settings.electricityRate = rate;
+  saveData();
+  calculateElectricity();
+  toast(`Default electricity rate saved at ${rate}`);
 });
 
 els.reportMonth.addEventListener("change", renderAll);
@@ -1027,6 +1156,13 @@ document.addEventListener("click", (event) => {
     const month = els.reportMonth.value || thisMonth();
     const row = getMonthlyReport(month).find((item) => item.tenant.id === dueTenantId);
     if (tenant && row) openContactSheet(tenant, buildDueMessage(row, month));
+  }
+
+  const paymentSlipId = target.dataset.paymentSlip;
+  if (paymentSlipId) {
+    const payment = data.payments.find((item) => item.id === paymentSlipId);
+    const tenant = payment ? findTenant(payment.tenantId) : null;
+    if (payment && tenant) openContactSheet(tenant, buildPaymentSlipMessage(payment));
   }
 
   const editRoomId = target.dataset.editRoom;
@@ -1114,6 +1250,8 @@ els.importData.addEventListener("change", async () => {
   try {
     const imported = JSON.parse(await file.text());
     data = { ...structuredClone(defaultData), ...imported };
+    ensureSettings();
+    els.unitRate.value = electricityRate();
     saveData();
     renderAll();
     toast("Data imported");
@@ -1128,6 +1266,7 @@ els.paymentMonth.value = thisMonth();
 els.paymentDate.value = today();
 els.electricityMonth.value = thisMonth();
 els.reportMonth.value = thisMonth();
+els.unitRate.value = electricityRate();
 resetTenantForm();
 calculateElectricity();
 setupInstallExperience();
