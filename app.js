@@ -449,7 +449,7 @@ function paymentTenants(payment) {
   return tenant ? [tenant] : [];
 }
 
-function buildPaymentSlipMessage(payment, tenant) {
+function buildPaymentSlipMessage(payment) {
   const room = paymentRoom(payment);
   const rows = getMonthlyReport(payment.month).filter((row) => row.room?.id === room?.id);
   const tenants = rows.map((row) => row.tenant);
@@ -463,7 +463,7 @@ function buildPaymentSlipMessage(payment, tenant) {
   return [
     `${HOSTEL_NAME} Payment Slip`,
     `Room: ${room?.number || "-"}`,
-    `Tenants: ${(tenants.length ? tenants : tenant ? [tenant] : []).map((item) => item.name).join(", ")}`,
+    tenants.length ? `Tenants: ${tenants.map((item) => item.name).join(", ")}` : "",
     `Month: ${monthLabel(payment.month)}`,
     `Receipt amount: ${money(payment.amount)}`,
     `Rent due: ${money(rentDue)}`,
@@ -1181,7 +1181,7 @@ function renderPayments() {
         payments: []
       });
     }
-    grouped.get(key).payments.push({ payment, tenants: paymentTenants(payment) });
+    grouped.get(key).payments.push({ payment, room });
   });
 
   els.paymentsTable.innerHTML = Array.from(grouped.values())
@@ -1194,22 +1194,17 @@ function renderPayments() {
             <span>${group.payments.length} payments | ${money(total)}</span>
           </div>
           ${table(
-            ["Room Tenants", "Month", "Amount", "Date", "Mode", "Remarks", "Slip"],
-            group.payments.map(({ payment, tenants }) => `
+            ["Room", "Month", "Amount", "Date", "Mode", "Remarks", "Slip"],
+            group.payments.map(({ payment }) => `
               <tr>
-                <td>${tenants.length ? tenants.map((tenant) => `<strong>${escapeHtml(tenant.name)}</strong><br><small>${escapeHtml(tenant.mobile || "")}</small>`).join("<hr>") : "No active tenant"}</td>
+                <td><strong>Room ${escapeHtml(group.roomNumber)}</strong></td>
                 <td>${escapeHtml(payment.month)}</td>
                 <td>${money(payment.amount)}</td>
                 <td>${escapeHtml(payment.date)}</td>
                 <td>${escapeHtml(payment.mode)}</td>
                 <td>${escapeHtml(payment.remarks || "-")}</td>
                 <td class="row-actions">
-                  ${tenants
-                    .map(
-                      (tenant) =>
-                        `<button data-payment-slip="${payment.id}" data-payment-slip-tenant="${tenant.id}" ${tenant.mobile ? "" : "disabled"}>${escapeHtml(tenant.name)} Slip</button>`
-                    )
-                    .join("")}
+                  <button data-payment-room-slip="${payment.id}">Room Slip</button>
                   <button class="danger" data-delete-payment="${payment.id}">Delete</button>
                 </td>
               </tr>
@@ -1821,7 +1816,13 @@ document.addEventListener("click", (event) => {
   if (paymentSlipId) {
     const payment = data.payments.find((item) => item.id === paymentSlipId);
     const tenant = target.dataset.paymentSlipTenant ? findTenant(target.dataset.paymentSlipTenant) : null;
-    if (payment && tenant) openContactSheet(tenant, buildPaymentSlipMessage(payment, tenant));
+    if (payment && tenant) openContactSheet(tenant, buildPaymentSlipMessage(payment));
+  }
+
+  const paymentRoomSlipId = target.dataset.paymentRoomSlip;
+  if (paymentRoomSlipId) {
+    const payment = data.payments.find((item) => item.id === paymentRoomSlipId);
+    if (payment) window.open(ownerWhatsappLink(buildPaymentSlipMessage(payment)), "_blank", "noopener");
   }
 
   const ownerSummary = target.dataset.ownerSummary;
