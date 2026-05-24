@@ -1,4 +1,4 @@
-const CACHE_NAME = "hostel-manager-v15";
+const CACHE_NAME = "hostel-manager-v16";
 const APP_ASSETS = [
   "./",
   "./index.html",
@@ -34,4 +34,9 @@ self.addEventListener("fetch", (event) => {
       })
       .catch(() => caches.match(event.request).then((cached) => cached || caches.match("./index.html")))
   );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(self.clients.matchAll({ type: "window" }).then((clients) => clients[0]?.focus() || self.clients.openWindow("./")));
 });

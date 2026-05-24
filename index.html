@@ -12,10 +12,10 @@
       content="Manage hostel rooms, tenants, rent payments, room-wise electricity bills, and monthly dues."
     />
     <title>Hostel Manager</title>
-    <link rel="manifest" href="manifest.webmanifest?v=15" />
+    <link rel="manifest" href="manifest.webmanifest?v=16" />
     <link rel="icon" href="icons/hostel-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icons/hostel-icon.svg" />
-    <link rel="stylesheet" href="styles.css?v=15" />
+    <link rel="stylesheet" href="styles.css?v=16" />
   </head>
   <body>
     <div class="app-shell">
@@ -34,6 +34,7 @@
           <button class="nav-item" data-view="tenants">Tenants</button>
           <button class="nav-item" data-view="payments">Payments</button>
           <button class="nav-item" data-view="electricity">Electricity</button>
+          <button class="nav-item" data-view="dues">Dues</button>
           <button class="nav-item" data-view="reports">Reports</button>
         </nav>
       </aside>
@@ -218,6 +219,36 @@
             <div id="reportsTable"></div>
           </section>
         </section>
+
+        <section id="dues" class="view">
+          <form id="dueSettingsForm" class="panel settings-panel">
+            <div class="panel-head">
+              <h3>Due Settings</h3>
+              <button id="enableNotifications" type="button" class="secondary">Enable Notifications</button>
+            </div>
+            <div class="settings-grid due-settings-grid">
+              <label>Monthly Due Day<input id="rentDueDay" type="number" min="1" max="28" required /></label>
+              <label>Owner WhatsApp<input id="ownerWhatsapp" type="tel" required /></label>
+              <button type="submit">Save Due Settings</button>
+            </div>
+          </form>
+
+          <section class="panel dues-panel">
+            <div class="panel-head">
+              <h3>Previous Month Pending</h3>
+              <button id="sendAllPreviousDues" type="button" class="secondary">WhatsApp Summary</button>
+            </div>
+            <div id="previousDuesList" class="due-list"></div>
+          </section>
+
+          <section class="panel dues-panel">
+            <div class="panel-head">
+              <h3>Upcoming Room Dues</h3>
+              <button id="sendAllUpcomingDues" type="button" class="secondary">WhatsApp Summary</button>
+            </div>
+            <div id="upcomingDuesList" class="due-list"></div>
+          </section>
+        </section>
       </main>
     </div>
 
@@ -274,6 +305,6 @@
         projectId: "hostel-manage-4ab56"
       };
     </script>
-    <script src="app.js?v=15"></script>
+    <script src="app.js?v=16"></script>
   </body>
 </html>

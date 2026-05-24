@@ -1,12 +1,15 @@
 const STORAGE_KEY = "hostel-manager-data-v1";
 const INSTALL_HINT_KEY = "hostel-manager-install-hint-dismissed";
 const AUTH_STORAGE_KEY = "hostel-manager-auth-v1";
+const NOTIFY_STORAGE_KEY = "hostel-manager-due-notifications-v1";
 const CLOUD_CONFIG = window.HOSTEL_CLOUD_CONFIG || {};
 const MAX_TENANTS_PER_ROOM = 4;
 
 const defaultData = {
   settings: {
     electricityRate: 8.5,
+    rentDueDay: 5,
+    ownerWhatsapp: "9639875555",
     occupancyRent: {
       1: 2500,
       2: 2800,
@@ -112,6 +115,14 @@ const els = {
   electricityCount: document.querySelector("#electricityCount"),
   reportMonth: document.querySelector("#reportMonth"),
   reportsTable: document.querySelector("#reportsTable"),
+  dueSettingsForm: document.querySelector("#dueSettingsForm"),
+  rentDueDay: document.querySelector("#rentDueDay"),
+  ownerWhatsapp: document.querySelector("#ownerWhatsapp"),
+  enableNotifications: document.querySelector("#enableNotifications"),
+  previousDuesList: document.querySelector("#previousDuesList"),
+  upcomingDuesList: document.querySelector("#upcomingDuesList"),
+  sendAllPreviousDues: document.querySelector("#sendAllPreviousDues"),
+  sendAllUpcomingDues: document.querySelector("#sendAllUpcomingDues"),
   iosInstallHint: document.querySelector("#iosInstallHint"),
   dismissInstallHint: document.querySelector("#dismissInstallHint"),
   contactSheet: document.querySelector("#contactSheet"),
@@ -185,6 +196,15 @@ function electricityRate() {
   return Number.isFinite(rate) && rate > 0 ? rate : 8.5;
 }
 
+function rentDueDay() {
+  const day = Number(data.settings?.rentDueDay);
+  return Math.min(Math.max(Number.isFinite(day) ? day : 5, 1), 28);
+}
+
+function ownerWhatsapp() {
+  return data.settings?.ownerWhatsapp || "9639875555";
+}
+
 function ensureSettings() {
   data.settings = {
     ...structuredClone(defaultData.settings),
@@ -202,6 +222,28 @@ function today() {
 
 function thisMonth() {
   return new Date().toISOString().slice(0, 7);
+}
+
+function localDate() {
+  const date = new Date();
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 10);
+}
+
+function shiftMonth(month, offset) {
+  const date = new Date(`${month}-01T00:00:00`);
+  date.setMonth(date.getMonth() + offset);
+  return date.toISOString().slice(0, 7);
+}
+
+function dueDateForMonth(month) {
+  return `${month}-${String(rentDueDay()).padStart(2, "0")}`;
+}
+
+function daysUntil(dateText) {
+  const todayDate = new Date(`${localDate()}T00:00:00`);
+  const dueDate = new Date(`${dateText}T00:00:00`);
+  return Math.round((dueDate - todayDate) / 86400000);
 }
 
 function escapeHtml(value) {
@@ -344,6 +386,39 @@ function buildPaymentSlipMessage(payment, tenant) {
     .join("\n");
 }
 
+function buildOwnerReminderMessage(summary, label = "Rent due reminder") {
+  return [
+    label,
+    `Room: ${summary.roomNumber}`,
+    `Month: ${monthLabel(summary.month)}`,
+    `Due date: ${summary.dueDate}`,
+    `Tenants: ${summary.tenants.map((tenant) => `${tenant.name} (${tenant.mobile || "-"})`).join(", ")}`,
+    `Rent: ${money(summary.rentTotal)}`,
+    `Electricity: ${money(summary.electricityTotal)}`,
+    `Paid: ${money(summary.paidTotal)}`,
+    `Balance: ${money(summary.balanceTotal)}`,
+    "Please call/follow up for rent."
+  ].join("\n");
+}
+
+function buildOwnerSummaryMessage(title, summaries) {
+  if (!summaries.length) return `${title}\nNo pending room dues.`;
+
+  return [
+    title,
+    ...summaries.map(
+      (summary) =>
+        `Room ${summary.roomNumber}: ${money(summary.balanceTotal)} pending, due ${summary.dueDate}, tenants: ${summary.tenants
+          .map((tenant) => `${tenant.name} ${tenant.mobile || ""}`.trim())
+          .join(", ")}`
+    )
+  ].join("\n");
+}
+
+function ownerWhatsappLink(message) {
+  return `https://wa.me/${whatsappPhone(ownerWhatsapp())}?text=${encodeURIComponent(message)}`;
+}
+
 function openContactSheet(tenant, message) {
   const phone = cleanPhone(tenant.mobile);
   const waPhone = whatsappPhone(tenant.mobile);
@@ -382,15 +457,18 @@ function renderCloudStatus() {
   if (!cloudReady()) {
     els.cloudStatus.textContent = "Cloud setup needed";
     els.cloudStatus.classList.remove("online");
+    els.cloudStatus.classList.remove("error");
     return;
   }
 
   if (cloudAuth?.email) {
     els.cloudStatus.textContent = `Synced: ${cloudAuth.email}`;
     els.cloudStatus.classList.add("online");
+    els.cloudStatus.classList.remove("error");
   } else {
     els.cloudStatus.textContent = "Local only";
     els.cloudStatus.classList.remove("online");
+    els.cloudStatus.classList.remove("error");
   }
 }
 
@@ -422,6 +500,23 @@ async function cloudRequest(url, options) {
   }
 
   return body;
+}
+
+function handleCloudError(error) {
+  const message = String(error?.message || "cloud sync failed").toLowerCase();
+  const sessionExpired = message.includes("invalid id token") || message.includes("user token expired") || message.includes("login expired");
+
+  if (sessionExpired) {
+    saveAuth(null);
+    toast("Cloud login expired. Login again.");
+    showCloudSheet();
+    return;
+  }
+
+  els.cloudStatus.textContent = "Sync failed";
+  els.cloudStatus.classList.remove("online");
+  els.cloudStatus.classList.add("error");
+  toast(`Cloud sync failed: ${message}`);
 }
 
 async function authenticateCloud(mode) {
@@ -483,6 +578,7 @@ async function uploadCloudData(showMessage = true) {
   if (!cloudReady() || !cloudAuth?.idToken) return;
 
   await refreshCloudToken();
+  const hostelData = JSON.stringify(data);
   await cloudRequest(firestoreDocUrl(), {
     method: "PATCH",
     headers: {
@@ -491,7 +587,7 @@ async function uploadCloudData(showMessage = true) {
     },
     body: JSON.stringify({
       fields: {
-        hostelData: { stringValue: JSON.stringify(data) },
+        hostelData: { stringValue: hostelData },
         updatedAt: { timestampValue: new Date().toISOString() },
         ownerEmail: { stringValue: cloudAuth.email || "" }
       }
@@ -536,7 +632,7 @@ function scheduleCloudSave() {
   if (!cloudReady() || !cloudAuth?.idToken) return;
   window.clearTimeout(syncTimer);
   syncTimer = window.setTimeout(() => {
-    uploadCloudData(false).catch((error) => toast(`Cloud sync failed: ${error.message}`));
+    uploadCloudData(false).catch(handleCloudError);
   }, 900);
 }
 
@@ -601,12 +697,52 @@ function renderRentSettings() {
   els.rentFor4.value = occupancyRent(4);
 }
 
+function renderDueSettings() {
+  els.rentDueDay.value = rentDueDay();
+  els.ownerWhatsapp.value = ownerWhatsapp();
+  if (!("Notification" in window)) {
+    els.enableNotifications.disabled = true;
+    els.enableNotifications.textContent = "Notifications Not Supported";
+  } else if (Notification.permission === "granted") {
+    els.enableNotifications.textContent = "Notifications Enabled";
+  }
+}
+
 function roomRentTotal(roomId) {
   return roomTenants(roomId).reduce((sum, tenant) => sum + tenantRentAmount(tenant), 0);
 }
 
 function fillPaymentAmountFromRoom() {
   if (els.paymentRoom.value) els.paymentAmount.value = roomRentTotal(els.paymentRoom.value);
+}
+
+function getRoomDueSummaries(month) {
+  const grouped = new Map();
+  getMonthlyReport(month).forEach((row) => {
+    const key = row.room?.id || "no-room";
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        roomId: row.room?.id || "",
+        roomNumber: row.room?.number || "-",
+        month,
+        dueDate: dueDateForMonth(month),
+        tenants: [],
+        rentTotal: 0,
+        electricityTotal: 0,
+        paidTotal: 0,
+        balanceTotal: 0
+      });
+    }
+
+    const summary = grouped.get(key);
+    summary.tenants.push(row.tenant);
+    summary.rentTotal += row.rentDue;
+    summary.electricityTotal += row.electricityDue;
+    summary.paidTotal += row.rentPaid;
+    summary.balanceTotal += row.balance;
+  });
+
+  return Array.from(grouped.values()).sort((a, b) => a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }));
 }
 
 function renderDashboard() {
@@ -940,6 +1076,52 @@ function renderReports() {
     .join("");
 }
 
+function dueStatusText(summary) {
+  const days = daysUntil(summary.dueDate);
+  if (days < 0) return `${Math.abs(days)} days late`;
+  if (days === 0) return "Due today";
+  return `Due in ${days} days`;
+}
+
+function dueListHtml(summaries, emptyMessage, label) {
+  if (!summaries.length) return `<div class="empty">${emptyMessage}</div>`;
+
+  return summaries
+    .map(
+      (summary) => `
+        <article class="due-item">
+          <div>
+            <strong>Room ${escapeHtml(summary.roomNumber)}</strong>
+            <span>${escapeHtml(monthLabel(summary.month))} | ${escapeHtml(dueStatusText(summary))}</span>
+            <small>${escapeHtml(summary.tenants.map((tenant) => `${tenant.name} (${tenant.mobile || "-"})`).join(", "))}</small>
+          </div>
+          <div>
+            <strong>${money(summary.balanceTotal)}</strong>
+            <span>Rent ${money(summary.rentTotal)} + Electricity ${money(summary.electricityTotal)} - Paid ${money(summary.paidTotal)}</span>
+          </div>
+          <a class="sheet-action whatsapp" href="${ownerWhatsappLink(buildOwnerReminderMessage(summary, label))}" target="_blank" rel="noopener">Send to Owner WhatsApp</a>
+        </article>
+      `
+    )
+    .join("");
+}
+
+function renderDues() {
+  renderDueSettings();
+  const previousMonth = shiftMonth(thisMonth(), -1);
+  const currentDueDate = dueDateForMonth(thisMonth());
+  const upcomingMonth = daysUntil(currentDueDate) >= 0 ? thisMonth() : shiftMonth(thisMonth(), 1);
+  const previousDues = getRoomDueSummaries(previousMonth).filter((summary) => summary.balanceTotal > 0);
+  const upcomingDues = getRoomDueSummaries(upcomingMonth).filter((summary) => summary.balanceTotal > 0);
+
+  els.previousDuesList.innerHTML = dueListHtml(previousDues, "No previous month pending dues.", "Previous month rent pending");
+  els.upcomingDuesList.innerHTML = dueListHtml(upcomingDues, "No upcoming room dues.", "Upcoming rent due");
+  els.sendAllPreviousDues.disabled = previousDues.length === 0;
+  els.sendAllUpcomingDues.disabled = upcomingDues.length === 0;
+  els.sendAllPreviousDues.dataset.ownerSummary = "previous";
+  els.sendAllUpcomingDues.dataset.ownerSummary = "upcoming";
+}
+
 function renderAll() {
   renderRoomOptions();
   renderTenantOptions();
@@ -950,6 +1132,7 @@ function renderAll() {
   renderPayments();
   renderElectricity();
   renderReports();
+  renderDues();
 }
 
 function setupInstallExperience() {
@@ -969,6 +1152,31 @@ function setupInstallExperience() {
     localStorage.setItem(INSTALL_HINT_KEY, "1");
     els.iosInstallHint.hidden = true;
   });
+}
+
+async function showDueNotification() {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+
+  const dueToday = getRoomDueSummaries(thisMonth()).filter((summary) => summary.balanceTotal > 0 && daysUntil(summary.dueDate) === 0);
+  if (!dueToday.length) return;
+
+  const notifyKey = `${localDate()}-${dueToday.map((summary) => summary.roomId).join("-")}`;
+  if (localStorage.getItem(NOTIFY_STORAGE_KEY) === notifyKey) return;
+
+  localStorage.setItem(NOTIFY_STORAGE_KEY, notifyKey);
+  const body = dueToday.map((summary) => `Room ${summary.roomNumber}: ${money(summary.balanceTotal)}`).join(", ");
+
+  if (navigator.serviceWorker?.ready) {
+    const registration = await navigator.serviceWorker.ready;
+    registration.showNotification("Hostel rent due today", {
+      body,
+      tag: "hostel-rent-due",
+      icon: "./icons/hostel-icon.svg"
+    });
+    return;
+  }
+
+  new Notification("Hostel rent due today", { body });
 }
 
 function resetRoomForm() {
@@ -1043,6 +1251,32 @@ els.rentSettingsForm.addEventListener("submit", (event) => {
   toast("Rent settings updated");
 });
 
+els.dueSettingsForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  ensureSettings();
+  data.settings.rentDueDay = Math.min(Math.max(Number(els.rentDueDay.value) || 5, 1), 28);
+  data.settings.ownerWhatsapp = cleanPhone(els.ownerWhatsapp.value) || "9639875555";
+  saveData();
+  renderAll();
+  toast("Due settings updated");
+});
+
+els.enableNotifications.addEventListener("click", async () => {
+  if (!("Notification" in window)) {
+    toast("Notifications are not supported on this device");
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission === "granted") {
+    toast("Due notifications enabled");
+    renderDueSettings();
+    showDueNotification().catch(() => {});
+  } else {
+    toast("Notification permission not allowed");
+  }
+});
+
 els.tenantForm.addEventListener("submit", (event) => {
   event.preventDefault();
   if (!els.tenantRoom.value) {
@@ -1104,7 +1338,7 @@ els.cloudLoginForm.addEventListener("submit", async (event) => {
   try {
     await authenticateCloud("signin");
   } catch (error) {
-    toast(`Login failed: ${error.message}`);
+    handleCloudError(error);
   }
 });
 
@@ -1112,7 +1346,7 @@ els.cloudCreateAccount.addEventListener("click", async () => {
   try {
     await authenticateCloud("signup");
   } catch (error) {
-    toast(`Account failed: ${error.message}`);
+    handleCloudError(error);
   }
 });
 
@@ -1120,7 +1354,7 @@ els.cloudUpload.addEventListener("click", async () => {
   try {
     await uploadCloudData(true);
   } catch (error) {
-    toast(`Upload failed: ${error.message}`);
+    handleCloudError(error);
   }
 });
 
@@ -1128,7 +1362,7 @@ els.cloudDownload.addEventListener("click", async () => {
   try {
     await downloadCloudData(false);
   } catch (error) {
-    toast(`Download failed: ${error.message}`);
+    handleCloudError(error);
   }
 });
 
@@ -1243,6 +1477,17 @@ document.addEventListener("click", (event) => {
     if (payment && tenant) openContactSheet(tenant, buildPaymentSlipMessage(payment, tenant));
   }
 
+  const ownerSummary = target.dataset.ownerSummary;
+  if (ownerSummary) {
+    const previousMonth = shiftMonth(thisMonth(), -1);
+    const currentDueDate = dueDateForMonth(thisMonth());
+    const upcomingMonth = daysUntil(currentDueDate) >= 0 ? thisMonth() : shiftMonth(thisMonth(), 1);
+    const month = ownerSummary === "previous" ? previousMonth : upcomingMonth;
+    const title = ownerSummary === "previous" ? "Previous month pending room dues" : "Upcoming room rent dues";
+    const summaries = getRoomDueSummaries(month).filter((summary) => summary.balanceTotal > 0);
+    window.open(ownerWhatsappLink(buildOwnerSummaryMessage(title, summaries)), "_blank", "noopener");
+  }
+
   const editRoomId = target.dataset.editRoom;
   if (editRoomId) {
     const room = findRoom(editRoomId);
@@ -1350,7 +1595,8 @@ calculateElectricity();
 setupInstallExperience();
 renderCloudStatus();
 renderAll();
+showDueNotification().catch(() => {});
 
 if (cloudReady() && cloudAuth?.idToken) {
-  downloadCloudData(false).catch((error) => toast(`Cloud sync failed: ${error.message}`));
+  downloadCloudData(false).catch(handleCloudError);
 }

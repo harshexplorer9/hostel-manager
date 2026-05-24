@@ -308,6 +308,11 @@ button.secondary:hover,
   color: #14613e;
 }
 
+.sync-pill.error {
+  background: #f8dddd;
+  color: #9d2525;
+}
+
 .form-panel {
   display: grid;
   gap: 12px;
@@ -467,6 +472,47 @@ td {
 
 .total-row {
   background: #f7faf7;
+}
+
+.dues-panel {
+  margin-bottom: 18px;
+}
+
+.due-settings-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) auto;
+}
+
+.due-list {
+  display: grid;
+  gap: 12px;
+}
+
+.due-item {
+  align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto;
+  padding: 14px;
+}
+
+.due-item strong,
+.due-item span,
+.due-item small {
+  display: block;
+}
+
+.due-item span,
+.due-item small {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 3px;
+}
+
+.due-item .sheet-action {
+  min-height: 42px;
 }
 
 .sheet-backdrop {
@@ -698,7 +744,9 @@ td {
   .content-grid,
   .dashboard-grid,
   .metric-grid,
-  .settings-grid {
+  .settings-grid,
+  .due-settings-grid,
+  .due-item {
     grid-template-columns: 1fr;
   }
 
