@@ -891,7 +891,7 @@ function sheetSyncUrl() {
 function renderSheetSyncStatus(message) {
   els.sheetSyncUrl.value = sheetSyncUrl();
   els.sheetSyncNow.disabled = !sheetSyncUrl();
-  els.sheetSyncStatus.textContent = message || (sheetSyncUrl() ? "Google Sheet sync is enabled." : "Optional: auto-update a Google Sheet in Drive after every app change.");
+  els.sheetSyncStatus.textContent = message || (sheetSyncUrl() ? "Google Sheet backup is enabled." : "Paste Apps Script Web App URL to auto-backup data in Google Sheet.");
 }
 
 function buildSpreadsheetPayload() {
@@ -958,19 +958,57 @@ function buildSpreadsheetPayload() {
 async function syncSpreadsheet(showMessage = false) {
   const url = sheetSyncUrl();
   if (!url) return;
+  const payload = JSON.stringify(buildSpreadsheetPayload());
 
-  await fetch(url, {
-    method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(buildSpreadsheetPayload())
-  });
+  await submitSheetBackup(url, payload);
 
   ensureSettings();
   data.settings.lastSheetSyncAt = new Date().toISOString();
   saveData(true);
-  renderSheetSyncStatus(`Sheet update sent: ${new Date().toLocaleTimeString("en-IN")}`);
-  if (showMessage) toast("Spreadsheet update sent");
+  renderSheetSyncStatus(`Sheet backup sent: ${new Date().toLocaleTimeString("en-IN")}`);
+  if (showMessage) toast("Spreadsheet backup sent");
+}
+
+function submitSheetBackup(url, payload) {
+  return new Promise((resolve, reject) => {
+    const frameName = `sheet_backup_${Date.now()}`;
+    const iframe = document.createElement("iframe");
+    const form = document.createElement("form");
+    const input = document.createElement("input");
+    let finished = false;
+
+    function cleanup() {
+      window.setTimeout(() => {
+        iframe.remove();
+        form.remove();
+      }, 1000);
+    }
+
+    function done(error) {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      if (error) reject(error);
+      else resolve();
+    }
+
+    iframe.name = frameName;
+    iframe.hidden = true;
+    form.hidden = true;
+    form.method = "POST";
+    form.action = url;
+    form.target = frameName;
+    input.type = "hidden";
+    input.name = "payload";
+    input.value = payload;
+    form.append(input);
+    document.body.append(iframe, form);
+
+    iframe.addEventListener("load", () => done());
+    iframe.addEventListener("error", () => done(new Error("sheet backup failed")));
+    form.submit();
+    window.setTimeout(() => done(), 3500);
+  });
 }
 
 function scheduleSheetSync() {
