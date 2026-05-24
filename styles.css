@@ -322,6 +322,17 @@ button.secondary:hover,
   margin: 0;
 }
 
+.inline-control {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 240px;
+}
+
+.inline-control select {
+  min-width: 170px;
+}
+
 .text-button {
   background: transparent;
   color: var(--accent);

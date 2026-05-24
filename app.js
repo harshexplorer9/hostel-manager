@@ -272,6 +272,16 @@ function dueDateForMonth(month) {
   return `${month}-${String(rentDueDay()).padStart(2, "0")}`;
 }
 
+function dateLabel(dateText) {
+  if (!dateText) return "";
+  const [year, month, day] = dateText.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric"
+  });
+}
+
 function daysUntil(dateText) {
   const todayDate = new Date(`${localDate()}T00:00:00`);
   const dueDate = new Date(`${dateText}T00:00:00`);
@@ -455,7 +465,7 @@ function buildOwnerReminderMessage(summary, label = "Rent due reminder") {
     label,
     `Room: ${summary.roomNumber}`,
     `Month: ${monthLabel(summary.month)}`,
-    `Due date: ${summary.dueDate}`,
+    `Due date: ${dateLabel(summary.dueDate)}`,
     `Tenants: ${summary.tenants.map((tenant) => `${tenant.name} (${tenant.mobile || "-"})`).join(", ")}`,
     `Rent: ${money(summary.rentTotal)}`,
     `Electricity: ${money(summary.electricityTotal)}`,
@@ -472,7 +482,7 @@ function buildOwnerSummaryMessage(title, summaries) {
     title,
     ...summaries.map(
       (summary) =>
-        `Room ${summary.roomNumber}: ${money(summary.balanceTotal)} pending, due ${summary.dueDate}, tenants: ${summary.tenants
+        `Room ${summary.roomNumber}: ${money(summary.balanceTotal)} pending, due ${dateLabel(summary.dueDate)}, tenants: ${summary.tenants
           .map((tenant) => `${tenant.name} ${tenant.mobile || ""}`.trim())
           .join(", ")}`
     )
@@ -1306,7 +1316,7 @@ function dueListHtml(summaries, emptyMessage, label) {
         <article class="due-item">
           <div>
             <strong>Room ${escapeHtml(summary.roomNumber)}</strong>
-            <span>${escapeHtml(monthLabel(summary.month))} | ${escapeHtml(dueStatusText(summary))}</span>
+            <span>${escapeHtml(monthLabel(summary.month))} | ${escapeHtml(dateLabel(summary.dueDate))} | ${escapeHtml(dueStatusText(summary))}</span>
             <small>${escapeHtml(summary.tenants.map((tenant) => `${tenant.name} (${tenant.mobile || "-"})`).join(", "))}</small>
           </div>
           <div>
