@@ -165,6 +165,7 @@ function loadData() {
 }
 
 function saveData(skipCloud = false) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   if (cloudAuth?.localId) localStorage.setItem(userDataStorageKey(), JSON.stringify(data));
   if (!skipCloud) scheduleCloudSave();
 }
@@ -557,10 +558,8 @@ function handleCloudError(error) {
 }
 
 function logoutCloud() {
+  saveData(true);
   saveAuth(null);
-  data = structuredClone(defaultData);
-  ensureSettings();
-  renderAll();
   closeCloudSheet();
   toast("Logged out");
 }
@@ -588,6 +587,9 @@ async function authenticateCloud(mode, credentials = {}) {
     expiresAt: Date.now() + Number(auth.expiresIn || 3600) * 1000
   });
 
+  data = loadData();
+  ensureSettings();
+  saveData(true);
   els.cloudPassword.value = "";
   els.gatePassword.value = "";
   await downloadCloudData(true);
@@ -654,7 +656,10 @@ async function downloadCloudData(uploadIfEmpty = false) {
   });
 
   if (response.status === 404) {
-    if (uploadIfEmpty) await uploadCloudData(false);
+    if (uploadIfEmpty) {
+      saveData(true);
+      await uploadCloudData(false);
+    }
     toast("New cloud account ready");
     return;
   }
@@ -667,7 +672,16 @@ async function downloadCloudData(uploadIfEmpty = false) {
 
   const remoteData = body.fields?.hostelData?.stringValue;
   if (remoteData) {
-    data = { ...structuredClone(defaultData), ...JSON.parse(remoteData) };
+    const parsedRemote = JSON.parse(remoteData);
+    const hasRemoteData =
+      (parsedRemote.rooms?.length || 0) + (parsedRemote.tenants?.length || 0) + (parsedRemote.payments?.length || 0) + (parsedRemote.electricity?.length || 0) > 0;
+    if (!hasRemoteData && (data.rooms.length || data.tenants.length || data.payments.length || data.electricity.length)) {
+      await uploadCloudData(false);
+      toast("Local data restored to cloud");
+      return;
+    }
+
+    data = { ...structuredClone(defaultData), ...parsedRemote };
     ensureSettings();
     saveData(true);
     els.unitRate.value = electricityRate();
