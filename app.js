@@ -1,3 +1,4 @@
+const HOSTEL_NAME = "B M Boys Hostel";
 const STORAGE_KEY = "hostel-manager-data-v1";
 const INSTALL_HINT_KEY = "hostel-manager-install-hint-dismissed";
 const AUTH_STORAGE_KEY = "hostel-manager-auth-v1";
@@ -42,13 +43,19 @@ const defaultData = {
   electricity: []
 };
 
+let cloudAuth = loadAuth();
 let data = loadData();
 let currentSearch = "";
-let cloudAuth = loadAuth();
 let syncTimer;
 ensureSettings();
 
 const els = {
+  loginGate: document.querySelector("#loginGate"),
+  gateLoginForm: document.querySelector("#gateLoginForm"),
+  gateEmail: document.querySelector("#gateEmail"),
+  gatePassword: document.querySelector("#gatePassword"),
+  gateCreateAccount: document.querySelector("#gateCreateAccount"),
+  gateLoginMessage: document.querySelector("#gateLoginMessage"),
   viewTitle: document.querySelector("#viewTitle"),
   globalSearch: document.querySelector("#globalSearch"),
   exportData: document.querySelector("#exportData"),
@@ -147,7 +154,7 @@ const els = {
 };
 
 function loadData() {
-  const saved = localStorage.getItem(STORAGE_KEY);
+  const saved = localStorage.getItem(userDataStorageKey()) || (cloudAuth?.localId ? localStorage.getItem(STORAGE_KEY) : null);
   if (!saved) return structuredClone(defaultData);
 
   try {
@@ -158,8 +165,12 @@ function loadData() {
 }
 
 function saveData(skipCloud = false) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  if (cloudAuth?.localId) localStorage.setItem(userDataStorageKey(), JSON.stringify(data));
   if (!skipCloud) scheduleCloudSave();
+}
+
+function userDataStorageKey(uid = cloudAuth?.localId) {
+  return uid ? `${STORAGE_KEY}-${uid}` : STORAGE_KEY;
 }
 
 function loadAuth() {
@@ -181,6 +192,17 @@ function saveAuth(auth) {
     localStorage.removeItem(AUTH_STORAGE_KEY);
   }
   renderCloudStatus();
+  updateAuthGate();
+}
+
+function updateAuthGate() {
+  const loggedIn = Boolean(cloudAuth?.idToken);
+  els.loginGate.hidden = loggedIn;
+  document.body.classList.toggle("auth-locked", !loggedIn);
+  if (loggedIn) {
+    els.gatePassword.value = "";
+    els.cloudPassword.value = "";
+  }
 }
 
 function money(value) {
@@ -370,13 +392,28 @@ function paymentTenants(payment) {
 
 function buildPaymentSlipMessage(payment, tenant) {
   const room = paymentRoom(payment);
+  const rows = getMonthlyReport(payment.month).filter((row) => row.room?.id === room?.id);
+  const tenants = rows.map((row) => row.tenant);
+  const rentDue = rows.reduce((sum, row) => sum + row.rentDue, 0);
+  const electricityDue = rows.reduce((sum, row) => sum + row.electricityDue, 0);
+  const paidTotal = rows.reduce((sum, row) => sum + row.rentPaid, 0);
+  const rentPaid = Math.min(paidTotal, rentDue);
+  const electricityPaid = Math.min(Math.max(paidTotal - rentDue, 0), electricityDue);
+  const balance = Math.max(rentDue + electricityDue - paidTotal, 0);
 
   return [
-    "Hostel Payment Slip",
-    tenant ? `Tenant: ${tenant.name}` : "",
+    `${HOSTEL_NAME} Payment Slip`,
     `Room: ${room?.number || "-"}`,
-    `Month: ${payment.month}`,
-    `Amount paid: ${money(payment.amount)}`,
+    `Tenants: ${(tenants.length ? tenants : tenant ? [tenant] : []).map((item) => item.name).join(", ")}`,
+    `Month: ${monthLabel(payment.month)}`,
+    `Receipt amount: ${money(payment.amount)}`,
+    `Rent due: ${money(rentDue)}`,
+    `Rent paid: ${money(rentPaid)}`,
+    `Electricity due: ${money(electricityDue)}`,
+    `Electricity paid: ${money(electricityPaid)}`,
+    `Total due: ${money(rentDue + electricityDue)}`,
+    `Total paid: ${money(paidTotal)}`,
+    `Balance due: ${money(balance)}`,
     `Payment date: ${payment.date}`,
     `Mode: ${payment.mode}`,
     payment.remarks ? `Remarks: ${payment.remarks}` : "",
@@ -519,14 +556,23 @@ function handleCloudError(error) {
   toast(`Cloud sync failed: ${message}`);
 }
 
-async function authenticateCloud(mode) {
+function logoutCloud() {
+  saveAuth(null);
+  data = structuredClone(defaultData);
+  ensureSettings();
+  renderAll();
+  closeCloudSheet();
+  toast("Logged out");
+}
+
+async function authenticateCloud(mode, credentials = {}) {
   if (!cloudReady()) {
     toast("Cloud config missing");
     return;
   }
 
-  const email = els.cloudEmail.value.trim();
-  const password = els.cloudPassword.value;
+  const email = (credentials.email || els.cloudEmail.value || els.gateEmail.value).trim();
+  const password = credentials.password || els.cloudPassword.value || els.gatePassword.value;
   const action = mode === "signup" ? "signUp" : "signInWithPassword";
   const auth = await cloudRequest(authUrl(action), {
     method: "POST",
@@ -543,8 +589,10 @@ async function authenticateCloud(mode) {
   });
 
   els.cloudPassword.value = "";
+  els.gatePassword.value = "";
   await downloadCloudData(true);
   showCloudSheet();
+  toast(`Logged in: ${auth.email}`);
 }
 
 async function refreshCloudToken() {
@@ -1333,6 +1381,35 @@ els.cloudSheet.addEventListener("click", (event) => {
   if (event.target === els.cloudSheet) closeCloudSheet();
 });
 
+els.gateLoginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  els.gateLoginMessage.textContent = "Logging in and syncing data...";
+  try {
+    await authenticateCloud("signin", {
+      email: els.gateEmail.value.trim(),
+      password: els.gatePassword.value
+    });
+    els.gateLoginMessage.textContent = `Logged in to ${HOSTEL_NAME}`;
+  } catch (error) {
+    els.gateLoginMessage.textContent = `Login failed: ${error.message}`;
+    handleCloudError(error);
+  }
+});
+
+els.gateCreateAccount.addEventListener("click", async () => {
+  els.gateLoginMessage.textContent = "Creating login...";
+  try {
+    await authenticateCloud("signup", {
+      email: els.gateEmail.value.trim(),
+      password: els.gatePassword.value
+    });
+    els.gateLoginMessage.textContent = `Login created for ${HOSTEL_NAME}`;
+  } catch (error) {
+    els.gateLoginMessage.textContent = `Account failed: ${error.message}`;
+    handleCloudError(error);
+  }
+});
+
 els.cloudLoginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
@@ -1367,9 +1444,7 @@ els.cloudDownload.addEventListener("click", async () => {
 });
 
 els.cloudLogout.addEventListener("click", () => {
-  saveAuth(null);
-  showCloudSheet();
-  toast("Logged out");
+  logoutCloud();
 });
 
 els.paymentForm.addEventListener("submit", (event) => {
@@ -1595,6 +1670,7 @@ calculateElectricity();
 setupInstallExperience();
 renderCloudStatus();
 renderAll();
+updateAuthGate();
 showDueNotification().catch(() => {});
 
 if (cloudReady() && cloudAuth?.idToken) {
