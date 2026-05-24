@@ -12,10 +12,10 @@
       content="Manage hostel rooms, tenants, rent payments, room-wise electricity bills, and monthly dues."
     />
     <title>B M Boys Hostel</title>
-    <link rel="manifest" href="manifest.webmanifest?v=28" />
+    <link rel="manifest" href="manifest.webmanifest?v=29" />
     <link rel="icon" href="icons/hostel-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icons/hostel-icon.svg" />
-    <link rel="stylesheet" href="styles.css?v=28" />
+    <link rel="stylesheet" href="styles.css?v=29" />
   </head>
   <body>
     <section id="loginGate" class="login-gate" hidden>
@@ -87,6 +87,14 @@
               <span>Pending Dues</span>
               <strong id="pendingDues">₹0</strong>
             </article>
+            <article class="metric">
+              <span>Today Collection</span>
+              <strong id="todayCollection">₹0</strong>
+            </article>
+            <article class="metric">
+              <span>Vacant Beds</span>
+              <strong id="vacantBeds">0</strong>
+            </article>
           </div>
 
           <div class="dashboard-grid">
@@ -103,6 +111,20 @@
                 <button class="text-button" data-view-link="reports">View report</button>
               </div>
               <div id="activityList" class="activity-list"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head">
+                <h3>Daily Collection</h3>
+                <button class="text-button" data-view-link="payments">Payments</button>
+              </div>
+              <div id="dailyCollectionList" class="status-list"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head">
+                <h3>Backup Health</h3>
+                <button class="text-button" data-view-link="reports">Check</button>
+              </div>
+              <div id="backupHealthList" class="status-list"></div>
             </section>
           </div>
         </section>
@@ -155,10 +177,18 @@
               <label>Room<select id="tenantRoom" required></select></label>
               <label>Custom Monthly Rent<input id="tenantRent" type="number" min="0" placeholder="Blank = use room occupancy rent" /></label>
               <label>Joining Date<input id="tenantJoinDate" type="date" required /></label>
+              <label>Leaving Date<input id="tenantLeaveDate" type="date" /></label>
               <label>ID Proof Type<input id="tenantIdType" placeholder="Aadhaar / PAN / Passport" /></label>
               <label>ID Proof Number<input id="tenantIdNumber" placeholder="ID number" /></label>
               <label>Guardian / Emergency Contact<input id="tenantEmergency" placeholder="Name and phone" /></label>
               <label>Address<textarea id="tenantAddress" rows="3" placeholder="Permanent address"></textarea></label>
+              <fieldset class="checklist-field">
+                <legend>Document Checklist</legend>
+                <label><input id="docIdProof" type="checkbox" /> ID proof collected</label>
+                <label><input id="docPhoto" type="checkbox" /> Photo collected</label>
+                <label><input id="docAgreement" type="checkbox" /> Agreement / form signed</label>
+                <label><input id="docDeposit" type="checkbox" /> Deposit recorded</label>
+              </fieldset>
               <label>Status<select id="tenantStatus"><option>Active</option><option>Left</option></select></label>
               <button type="submit">Save Tenant</button>
               <button type="button" class="secondary" id="resetTenantForm">Clear</button>
@@ -341,6 +371,6 @@
         projectId: "hostel-manage-4ab56"
       };
     </script>
-    <script src="app.js?v=28"></script>
+    <script src="app.js?v=29"></script>
   </body>
 </html>

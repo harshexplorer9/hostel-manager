@@ -247,7 +247,7 @@ button.secondary:hover,
 .metric-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   margin-bottom: 18px;
 }
 
@@ -395,6 +395,33 @@ label {
   font-size: 13px;
   font-weight: 800;
   gap: 7px;
+}
+
+.checklist-field {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+}
+
+.checklist-field legend {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+  padding: 0 4px;
+}
+
+.checklist-field label {
+  align-items: center;
+  display: flex;
+  gap: 9px;
+}
+
+.checklist-field input {
+  min-height: auto;
+  width: auto;
 }
 
 input,

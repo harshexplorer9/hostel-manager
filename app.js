@@ -67,8 +67,12 @@ const els = {
   occupiedRooms: document.querySelector("#occupiedRooms"),
   monthlyRent: document.querySelector("#monthlyRent"),
   pendingDues: document.querySelector("#pendingDues"),
+  todayCollection: document.querySelector("#todayCollection"),
+  vacantBeds: document.querySelector("#vacantBeds"),
   roomStatusList: document.querySelector("#roomStatusList"),
   activityList: document.querySelector("#activityList"),
+  dailyCollectionList: document.querySelector("#dailyCollectionList"),
+  backupHealthList: document.querySelector("#backupHealthList"),
   roomForm: document.querySelector("#roomForm"),
   roomId: document.querySelector("#roomId"),
   roomNumber: document.querySelector("#roomNumber"),
@@ -93,10 +97,15 @@ const els = {
   tenantRoom: document.querySelector("#tenantRoom"),
   tenantRent: document.querySelector("#tenantRent"),
   tenantJoinDate: document.querySelector("#tenantJoinDate"),
+  tenantLeaveDate: document.querySelector("#tenantLeaveDate"),
   tenantIdType: document.querySelector("#tenantIdType"),
   tenantIdNumber: document.querySelector("#tenantIdNumber"),
   tenantEmergency: document.querySelector("#tenantEmergency"),
   tenantAddress: document.querySelector("#tenantAddress"),
+  docIdProof: document.querySelector("#docIdProof"),
+  docPhoto: document.querySelector("#docPhoto"),
+  docAgreement: document.querySelector("#docAgreement"),
+  docDeposit: document.querySelector("#docDeposit"),
   tenantStatus: document.querySelector("#tenantStatus"),
   resetTenantForm: document.querySelector("#resetTenantForm"),
   tenantsTable: document.querySelector("#tenantsTable"),
@@ -175,6 +184,8 @@ function loadData() {
 }
 
 function saveData(skipCloud = false) {
+  ensureSettings();
+  data.settings.lastLocalSaveAt = new Date().toISOString();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   if (cloudAuth?.localId) localStorage.setItem(userDataStorageKey(), JSON.stringify(data));
   if (!skipCloud) {
@@ -304,6 +315,17 @@ function dateLabel(dateText) {
   });
 }
 
+function dateTimeLabel(dateText) {
+  if (!dateText) return "Not yet";
+  return new Date(dateText).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
 function daysUntil(dateText) {
   const todayDate = new Date(`${localDate()}T00:00:00`);
   const dueDate = new Date(`${dateText}T00:00:00`);
@@ -420,6 +442,63 @@ function roomOccupantsHtml(tenants) {
   `;
 }
 
+function tenantDocuments(tenant) {
+  return {
+    idProof: Boolean(tenant.docs?.idProof),
+    photo: Boolean(tenant.docs?.photo),
+    agreement: Boolean(tenant.docs?.agreement),
+    deposit: Boolean(tenant.docs?.deposit)
+  };
+}
+
+function documentChecklistText(tenant) {
+  const docs = tenantDocuments(tenant);
+  const labels = {
+    idProof: "ID",
+    photo: "Photo",
+    agreement: "Agreement",
+    deposit: "Deposit"
+  };
+  const entries = Object.entries(docs);
+  const completed = entries.filter(([, value]) => value).length;
+  const missing = entries.filter(([, value]) => !value).map(([key]) => labels[key]);
+  return {
+    completed,
+    total: entries.length,
+    missing: missing.length ? missing.join(", ") : "All done"
+  };
+}
+
+function roomLeavingSoon(roomId, limitDays = 30) {
+  return activeTenants()
+    .filter((tenant) => tenant.roomId === roomId && tenant.leaveDate)
+    .map((tenant) => ({ tenant, days: daysUntil(tenant.leaveDate) }))
+    .filter((item) => item.days >= 0 && item.days <= limitDays)
+    .sort((a, b) => a.days - b.days);
+}
+
+function roomVacantBeds(room) {
+  return Math.max(roomCapacity(room) - roomTenants(room.id).length, 0);
+}
+
+function totalVacantBeds() {
+  return data.rooms.reduce((sum, room) => sum + roomVacantBeds(room), 0);
+}
+
+function paymentsForDate(date = localDate()) {
+  return data.payments.filter((payment) => payment.date === date);
+}
+
+function collectionSummary(date = localDate()) {
+  const payments = paymentsForDate(date);
+  const total = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const modes = payments.reduce((acc, payment) => {
+    acc[payment.mode] = (acc[payment.mode] || 0) + Number(payment.amount || 0);
+    return acc;
+  }, {});
+  return { payments, total, modes };
+}
+
 function buildGeneralMessage(tenant) {
   return `Hello ${tenant.name}, this is regarding your hostel room ${tenantRoomLabel(tenant)}.`;
 }
@@ -480,6 +559,38 @@ function buildPaymentSlipMessage(payment) {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function buildMoveOutSettlementMessage(tenant) {
+  const room = findRoom(tenant.roomId);
+  const settlementDate = tenant.leaveDate || localDate();
+  const month = settlementDate.slice(0, 7);
+  const row = getMonthlyReport(month).find((item) => item.tenant.id === tenant.id);
+  const rentDue = row?.rentDue ?? tenantRentAmount(tenant);
+  const electricityDue = row?.electricityDue ?? 0;
+  const rentPaid = row?.rentPaid ?? 0;
+  const balance = Math.max(rentDue + electricityDue - rentPaid, 0);
+  const deposit = Number(room?.deposit || 0);
+  const suggestedRefund = Math.max(deposit - balance, 0);
+  const deduction = Math.min(balance, deposit);
+
+  return [
+    `${HOSTEL_NAME} Move-Out Settlement`,
+    `Tenant: ${tenant.name}`,
+    `Mobile: ${tenant.mobile || "-"}`,
+    `Room: ${room?.number || "-"}`,
+    `Joining date: ${dateLabel(tenant.joinDate) || "-"}`,
+    `Leaving date: ${dateLabel(settlementDate)}`,
+    `Settlement month: ${monthLabel(month)}`,
+    `Rent due: ${money(rentDue)}`,
+    `Electricity due: ${money(electricityDue)}`,
+    `Paid: ${money(rentPaid)}`,
+    `Pending balance: ${money(balance)}`,
+    `Deposit on record: ${money(deposit)}`,
+    `Deposit deduction: ${money(deduction)}`,
+    `Suggested refund: ${money(suggestedRefund)}`,
+    "Please confirm final room handover and key return."
+  ].join("\n");
 }
 
 function buildOwnerReminderMessage(summary, label = "Rent due reminder") {
@@ -696,6 +807,8 @@ async function uploadCloudData(showMessage = true) {
   if (!cloudReady() || !cloudAuth?.idToken) return;
 
   await refreshCloudToken();
+  ensureSettings();
+  data.settings.lastCloudSyncAt = new Date().toISOString();
   const hostelData = JSON.stringify(data);
   await cloudRequest(firestoreDocUrl(), {
     method: "PATCH",
@@ -713,6 +826,7 @@ async function uploadCloudData(showMessage = true) {
   });
 
   markCloudSynced();
+  saveData(true);
   if (showMessage) toast("Cloud sync complete");
 }
 
@@ -803,8 +917,10 @@ function buildSpreadsheetPayload() {
       room: tenantRoomLabel(tenant),
       monthlyRent: tenantRentAmount(tenant),
       joiningDate: tenant.joinDate,
+      leavingDate: tenant.leaveDate || "",
       idType: tenant.idType,
       idNumber: tenant.idNumber,
+      documents: `${documentChecklistText(tenant).completed}/${documentChecklistText(tenant).total} - ${documentChecklistText(tenant).missing}`,
       emergency: tenant.emergency,
       address: tenant.address,
       status: tenant.status
@@ -850,6 +966,9 @@ async function syncSpreadsheet(showMessage = false) {
     body: JSON.stringify(buildSpreadsheetPayload())
   });
 
+  ensureSettings();
+  data.settings.lastSheetSyncAt = new Date().toISOString();
+  saveData(true);
   renderSheetSyncStatus(`Sheet update sent: ${new Date().toLocaleTimeString("en-IN")}`);
   if (showMessage) toast("Spreadsheet update sent");
 }
@@ -864,7 +983,7 @@ function scheduleSheetSync() {
 
 function tenantMatchesSearch(tenant) {
   const room = findRoom(tenant.roomId);
-  return [tenant.name, tenant.mobile, tenant.altMobile, tenant.idNumber, room?.number]
+  return [tenant.name, tenant.mobile, tenant.altMobile, tenant.idNumber, tenant.leaveDate, room?.number]
     .join(" ")
     .toLowerCase()
     .includes(currentSearch);
@@ -1034,11 +1153,14 @@ function renderDashboard() {
   const monthlyRent = activeTenants().reduce((sum, tenant) => sum + tenantRentAmount(tenant), 0);
   const report = getMonthlyReport(els.reportMonth.value || thisMonth());
   const pending = report.reduce((sum, row) => sum + row.balance, 0);
+  const todaySummary = collectionSummary();
 
   els.totalRooms.textContent = data.rooms.length;
   els.occupiedRooms.textContent = occupied;
   els.monthlyRent.textContent = money(monthlyRent);
   els.pendingDues.textContent = money(pending);
+  els.todayCollection.textContent = money(todaySummary.total);
+  els.vacantBeds.textContent = totalVacantBeds();
 
   els.roomStatusList.innerHTML =
     data.rooms
@@ -1046,13 +1168,22 @@ function renderDashboard() {
       .map((room) => {
         const count = roomTenants(room.id).length;
         const capacity = roomCapacity(room);
+        const leaving = roomLeavingSoon(room.id);
         const status = count >= capacity ? "Full" : count > 0 ? "Partial" : "Vacant";
         const badgeClass = status === "Full" ? "red" : status === "Partial" ? "orange" : "green";
         const roomTotalRent = roomRentTotal(room.id);
         const tenantShare = count ? roomTotalRent / count : occupancyRent(1);
         return `
           <div class="status-item">
-            <div><strong>Room ${escapeHtml(room.number)}</strong><span>${count}/${capacity} tenants, ${money(roomTotalRent || occupancyRent(1))} room rent, ${money(tenantShare)} each</span></div>
+            <div>
+              <strong>Room ${escapeHtml(room.number)}</strong>
+              <span>${count}/${capacity} tenants, ${roomVacantBeds(room)} vacant beds, ${money(roomTotalRent || occupancyRent(1))} room rent, ${money(tenantShare)} each</span>
+              ${
+                leaving.length
+                  ? `<span>Leaving soon: ${leaving.map((item) => `${escapeHtml(item.tenant.name)} on ${escapeHtml(dateLabel(item.tenant.leaveDate))}`).join(", ")}</span>`
+                  : ""
+              }
+            </div>
             <span class="badge ${badgeClass}">${status}</span>
           </div>
         `;
@@ -1090,6 +1221,55 @@ function renderDashboard() {
       `
       )
       .join("") || '<div class="empty">Activity will appear here.</div>';
+
+  const modeText = Object.entries(todaySummary.modes)
+    .map(([mode, amount]) => `${escapeHtml(mode)} ${money(amount)}`)
+    .join(" | ");
+  els.dailyCollectionList.innerHTML = todaySummary.payments.length
+    ? `
+      <div class="status-item">
+        <div><strong>${money(todaySummary.total)} collected today</strong><span>${modeText}</span></div>
+        <span class="badge green">${todaySummary.payments.length} entries</span>
+      </div>
+      ${todaySummary.payments
+        .slice(0, 6)
+        .map((payment) => `<div class="status-item"><div><strong>Room ${escapeHtml(paymentRoom(payment)?.number || "-")}</strong><span>${escapeHtml(payment.mode)} | ${escapeHtml(payment.remarks || "Rent payment")}</span></div><span>${money(payment.amount)}</span></div>`)
+        .join("")}
+    `
+    : '<div class="empty">No collection recorded today.</div>';
+
+  const backupItems = [
+    {
+      title: cloudAuth?.email ? `Cloud login: ${cloudAuth.email}` : "Cloud login missing",
+      sub: data.settings.lastCloudSyncAt ? `Last cloud sync ${dateTimeLabel(data.settings.lastCloudSyncAt)}` : "No successful cloud sync saved yet",
+      badge: cloudAuth?.idToken ? "Active" : "Login"
+    },
+    {
+      title: sheetSyncUrl() ? "Google Sheet sync enabled" : "Google Sheet sync disabled",
+      sub: data.settings.lastSheetSyncAt ? `Last sheet update ${dateTimeLabel(data.settings.lastSheetSyncAt)}` : "Sheet update not recorded yet",
+      badge: sheetSyncUrl() ? "Sheet" : "Off"
+    },
+    {
+      title: "Local backup on this device",
+      sub: `Last local save ${dateTimeLabel(data.settings.lastLocalSaveAt)}`,
+      badge: "Saved"
+    },
+    {
+      title: "Manual JSON backup",
+      sub: data.settings.lastExportAt ? `Last export ${dateTimeLabel(data.settings.lastExportAt)}` : "Use Export when you want an extra file backup",
+      badge: data.settings.lastExportAt ? "Exported" : "Optional"
+    }
+  ];
+  els.backupHealthList.innerHTML = backupItems
+    .map(
+      (item) => `
+        <div class="status-item">
+          <div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.sub)}</span></div>
+          <span class="badge ${["Off", "Login", "Optional"].includes(item.badge) ? "orange" : "green"}">${escapeHtml(item.badge)}</span>
+        </div>
+      `
+    )
+    .join("");
 }
 
 function renderRooms() {
@@ -1100,17 +1280,26 @@ function renderRooms() {
 
   els.roomCount.textContent = `${rooms.length} rooms`;
   els.roomsTable.innerHTML = table(
-    ["Room", "Floor", "Occupancy", "Rent Split", "Deposit", "Notes", "Actions"],
+    ["Room", "Floor", "Occupancy", "Vacancy", "Rent Split", "Deposit", "Notes", "Actions"],
     rooms.map((room) => {
       const tenants = roomTenants(room.id);
       const capacity = roomCapacity(room);
       const totalRent = occupancyRent(tenants.length || 1);
       const tenantShare = tenants.length ? totalRent / tenants.length : totalRent;
+      const leaving = roomLeavingSoon(room.id);
       return `
         <tr>
           <td><strong>${escapeHtml(room.number)}</strong></td>
           <td>${escapeHtml(room.floor || "-")}</td>
           <td>${tenants.length}/${capacity}${room.capacity > MAX_TENANTS_PER_ROOM ? " (max 4)" : ""}<br>${roomOccupantsHtml(tenants)}</td>
+          <td>
+            <strong>${roomVacantBeds(room)} vacant beds</strong>
+            ${
+              leaving.length
+                ? `<br><small>Leaving soon: ${leaving.map((item) => `${escapeHtml(item.tenant.name)} (${escapeHtml(dateLabel(item.tenant.leaveDate))})`).join("<br>")}</small>`
+                : "<br><small>No leaving notice</small>"
+            }
+          </td>
           <td><strong>${money(totalRent)}</strong><br><small>${tenants.length || 1} tenant split: ${money(tenantShare)} each</small></td>
           <td>${money(room.deposit)}</td>
           <td>${escapeHtml(room.notes || "-")}</td>
@@ -1129,30 +1318,42 @@ function renderTenants() {
   const tenants = data.tenants.filter(tenantMatchesSearch);
   els.tenantCount.textContent = `${tenants.length} tenants`;
   els.tenantsTable.innerHTML = table(
-    ["Name", "Mobile", "Room", "Rent", "Joining", "ID Proof", "Emergency", "Status", "Actions"],
+    ["Name", "Mobile", "Room", "Rent", "Joining / Leaving", "ID Proof", "Documents", "Emergency", "Status", "Actions"],
     tenants.map(
-      (tenant) => `
-      <tr>
-        <td><strong>${escapeHtml(tenant.name)}</strong><br><small>${escapeHtml(tenant.address || "")}</small></td>
-        <td>
-          <div class="mobile-cell">
-            <strong>${escapeHtml(tenant.mobile)}</strong>
-            <small>${escapeHtml(tenant.altMobile || "")}</small>
-            <button class="contact-button" data-contact-tenant="${tenant.id}">Call / WhatsApp</button>
-          </div>
-        </td>
-        <td>${escapeHtml(tenantRoomLabel(tenant))}</td>
-        <td>${money(tenantRentAmount(tenant))}</td>
-        <td>${escapeHtml(tenant.joinDate)}</td>
-        <td>${escapeHtml(tenant.idType || "-")}<br><small>${escapeHtml(tenant.idNumber || "")}</small></td>
-        <td>${escapeHtml(tenant.emergency || "-")}</td>
-        <td><span class="badge ${tenant.status === "Active" ? "green" : "orange"}">${escapeHtml(tenant.status)}</span></td>
-        <td class="row-actions">
-          <button data-edit-tenant="${tenant.id}">Edit</button>
-          <button class="danger" data-delete-tenant="${tenant.id}">Delete</button>
-        </td>
-      </tr>
-    `
+      (tenant) => {
+        const docs = documentChecklistText(tenant);
+        const leaveDays = tenant.leaveDate ? daysUntil(tenant.leaveDate) : null;
+        const leavingBadge =
+          tenant.leaveDate && leaveDays >= 0 && leaveDays <= 30 ? `<br><span class="badge orange">Leaving in ${leaveDays} days</span>` : "";
+        return `
+          <tr>
+            <td><strong>${escapeHtml(tenant.name)}</strong><br><small>${escapeHtml(tenant.address || "")}</small></td>
+            <td>
+              <div class="mobile-cell">
+                <strong>${escapeHtml(tenant.mobile)}</strong>
+                <small>${escapeHtml(tenant.altMobile || "")}</small>
+                <button class="contact-button" data-contact-tenant="${tenant.id}">Call / WhatsApp</button>
+              </div>
+            </td>
+            <td>${escapeHtml(tenantRoomLabel(tenant))}</td>
+            <td>${money(tenantRentAmount(tenant))}</td>
+            <td>
+              Join: ${escapeHtml(tenant.joinDate || "-")}<br>
+              <small>Leave: ${escapeHtml(tenant.leaveDate || "-")}</small>
+              ${leavingBadge}
+            </td>
+            <td>${escapeHtml(tenant.idType || "-")}<br><small>${escapeHtml(tenant.idNumber || "")}</small></td>
+            <td><strong>${docs.completed}/${docs.total}</strong><br><small>${escapeHtml(docs.missing)}</small></td>
+            <td>${escapeHtml(tenant.emergency || "-")}</td>
+            <td><span class="badge ${tenant.status === "Active" ? "green" : "orange"}">${escapeHtml(tenant.status)}</span></td>
+            <td class="row-actions">
+              <button data-edit-tenant="${tenant.id}">Edit</button>
+              <button data-settlement-tenant="${tenant.id}">Settlement</button>
+              <button class="danger" data-delete-tenant="${tenant.id}">Delete</button>
+            </td>
+          </tr>
+        `;
+      }
     ),
     "No tenants found."
   );
@@ -1480,7 +1681,12 @@ function resetTenantForm() {
   els.tenantId.value = "";
   els.tenantRent.value = "";
   els.tenantJoinDate.value = today();
+  els.tenantLeaveDate.value = "";
   els.tenantStatus.value = "Active";
+  els.docIdProof.checked = false;
+  els.docPhoto.checked = false;
+  els.docAgreement.checked = false;
+  els.docDeposit.checked = false;
 }
 
 document.querySelectorAll(".nav-item, [data-view-link]").forEach((button) => {
@@ -1590,10 +1796,17 @@ els.tenantForm.addEventListener("submit", (event) => {
     roomId: els.tenantRoom.value,
     rent: Number(els.tenantRent.value) || 0,
     joinDate: els.tenantJoinDate.value,
+    leaveDate: els.tenantLeaveDate.value,
     idType: els.tenantIdType.value.trim(),
     idNumber: els.tenantIdNumber.value.trim(),
     emergency: els.tenantEmergency.value.trim(),
     address: els.tenantAddress.value.trim(),
+    docs: {
+      idProof: els.docIdProof.checked,
+      photo: els.docPhoto.checked,
+      agreement: els.docAgreement.checked,
+      deposit: els.docDeposit.checked
+    },
     status: els.tenantStatus.value
   };
 
@@ -1877,12 +2090,24 @@ document.addEventListener("click", (event) => {
     els.tenantRoom.value = tenant.roomId;
     els.tenantRent.value = tenant.rent || "";
     els.tenantJoinDate.value = tenant.joinDate;
+    els.tenantLeaveDate.value = tenant.leaveDate || "";
     els.tenantIdType.value = tenant.idType;
     els.tenantIdNumber.value = tenant.idNumber;
     els.tenantEmergency.value = tenant.emergency;
     els.tenantAddress.value = tenant.address;
+    const docs = tenantDocuments(tenant);
+    els.docIdProof.checked = docs.idProof;
+    els.docPhoto.checked = docs.photo;
+    els.docAgreement.checked = docs.agreement;
+    els.docDeposit.checked = docs.deposit;
     els.tenantStatus.value = tenant.status;
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  const settlementTenantId = target.dataset.settlementTenant;
+  if (settlementTenantId) {
+    const tenant = findTenant(settlementTenantId);
+    if (tenant) openContactSheet(tenant, buildMoveOutSettlementMessage(tenant));
   }
 
   const deleteTenantId = target.dataset.deleteTenant;
@@ -1912,6 +2137,9 @@ document.addEventListener("click", (event) => {
 });
 
 els.exportData.addEventListener("click", () => {
+  ensureSettings();
+  data.settings.lastExportAt = new Date().toISOString();
+  saveData(true);
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -1928,6 +2156,7 @@ els.importData.addEventListener("change", async () => {
     const imported = JSON.parse(await file.text());
     data = { ...structuredClone(defaultData), ...imported };
     ensureSettings();
+    data.settings.lastImportAt = new Date().toISOString();
     els.unitRate.value = electricityRate();
     saveData();
     renderAll();
