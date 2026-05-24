@@ -129,8 +129,10 @@ const els = {
   ownerWhatsapp: document.querySelector("#ownerWhatsapp"),
   enableNotifications: document.querySelector("#enableNotifications"),
   previousDuesList: document.querySelector("#previousDuesList"),
+  todayDuesList: document.querySelector("#todayDuesList"),
   upcomingDuesList: document.querySelector("#upcomingDuesList"),
   sendAllPreviousDues: document.querySelector("#sendAllPreviousDues"),
+  sendTodayDues: document.querySelector("#sendTodayDues"),
   sendAllUpcomingDues: document.querySelector("#sendAllUpcomingDues"),
   iosInstallHint: document.querySelector("#iosInstallHint"),
   dismissInstallHint: document.querySelector("#dismissInstallHint"),
@@ -1005,6 +1007,17 @@ function getPreviousRoomDues() {
     .sort((a, b) => b.dueDate.localeCompare(a.dueDate) || a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }));
 }
 
+function getUpcomingRoomDues() {
+  return upcomingDueMonths()
+    .flatMap((month) => getRoomDueSummaries(month))
+    .filter((summary) => summary.balanceTotal > 0 && daysUntil(summary.dueDate) >= 0 && daysUntil(summary.dueDate) <= rentDueDay())
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }));
+}
+
+function getTodayRoomDues() {
+  return getUpcomingRoomDues().filter((summary) => daysUntil(summary.dueDate) === 0);
+}
+
 function renderDashboard() {
   const occupied = data.rooms.filter((room) => roomTenants(room.id).length > 0).length;
   const monthlyRent = activeTenants().reduce((sum, tenant) => sum + tenantRentAmount(tenant), 0);
@@ -1371,15 +1384,16 @@ function dueListHtml(summaries, emptyMessage, label) {
 function renderDues() {
   renderDueSettings();
   const previousDues = getPreviousRoomDues();
-  const upcomingDues = upcomingDueMonths()
-    .flatMap((month) => getRoomDueSummaries(month))
-    .filter((summary) => summary.balanceTotal > 0 && daysUntil(summary.dueDate) >= 0 && daysUntil(summary.dueDate) <= rentDueDay())
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }));
+  const upcomingDues = getUpcomingRoomDues();
+  const todayDues = getTodayRoomDues();
 
+  els.todayDuesList.innerHTML = dueListHtml(todayDues, "No room dues today.", "Rent due today");
   els.previousDuesList.innerHTML = dueListHtml(previousDues, "No previous billing-cycle pending dues.", "Previous billing-cycle rent pending");
   els.upcomingDuesList.innerHTML = dueListHtml(upcomingDues, `No room dues in the next ${rentDueDay()} days.`, "Upcoming rent due");
+  els.sendTodayDues.disabled = todayDues.length === 0;
   els.sendAllPreviousDues.disabled = previousDues.length === 0;
   els.sendAllUpcomingDues.disabled = upcomingDues.length === 0;
+  els.sendTodayDues.dataset.ownerSummary = "today";
   els.sendAllPreviousDues.dataset.ownerSummary = "previous";
   els.sendAllUpcomingDues.dataset.ownerSummary = "upcoming";
 }
@@ -1421,9 +1435,7 @@ function setupInstallExperience() {
 async function showDueNotification() {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
 
-  const dueToday = upcomingDueMonths(1)
-    .flatMap((month) => getRoomDueSummaries(month))
-    .filter((summary) => summary.balanceTotal > 0 && daysUntil(summary.dueDate) === 0);
+  const dueToday = getTodayRoomDues();
   if (!dueToday.length) return;
 
   const notifyKey = `${localDate()}-${dueToday.map((summary) => summary.roomId).join("-")}`;
@@ -1791,14 +1803,18 @@ document.addEventListener("click", (event) => {
 
   const ownerSummary = target.dataset.ownerSummary;
   if (ownerSummary) {
-    const title = ownerSummary === "previous" ? "Previous month pending room dues" : "Upcoming room rent dues";
-    const summaries =
-      ownerSummary === "previous"
-        ? getPreviousRoomDues()
-        : upcomingDueMonths()
-            .flatMap((month) => getRoomDueSummaries(month))
-            .filter((summary) => summary.balanceTotal > 0 && daysUntil(summary.dueDate) >= 0 && daysUntil(summary.dueDate) <= rentDueDay())
-            .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }));
+    const titles = {
+      today: "Room rent due today",
+      previous: "Previous pending room dues",
+      upcoming: "Upcoming room rent dues"
+    };
+    const summaryGroups = {
+      today: getTodayRoomDues,
+      previous: getPreviousRoomDues,
+      upcoming: getUpcomingRoomDues
+    };
+    const summaries = (summaryGroups[ownerSummary] || getUpcomingRoomDues)();
+    const title = titles[ownerSummary] || "Room rent dues";
     window.open(ownerWhatsappLink(buildOwnerSummaryMessage(title, summaries)), "_blank", "noopener");
   }
 
