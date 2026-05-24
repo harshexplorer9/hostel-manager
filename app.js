@@ -960,13 +960,23 @@ async function syncSpreadsheet(showMessage = false) {
   if (!url) return;
   const payload = JSON.stringify(buildSpreadsheetPayload());
 
-  await submitSheetBackup(url, payload);
+  await sendSheetBackup(url, payload);
 
   ensureSettings();
   data.settings.lastSheetSyncAt = new Date().toISOString();
   saveData(true);
   renderSheetSyncStatus(`Sheet backup sent: ${new Date().toLocaleTimeString("en-IN")}`);
   if (showMessage) toast("Spreadsheet backup sent");
+}
+
+async function sendSheetBackup(url, payload) {
+  const attempts = [];
+  if (navigator.sendBeacon) {
+    const blob = new Blob([payload], { type: "text/plain;charset=utf-8" });
+    if (navigator.sendBeacon(url, blob)) attempts.push(new Promise((resolve) => window.setTimeout(resolve, 1500)));
+  }
+  attempts.push(submitSheetBackup(url, payload));
+  await Promise.all(attempts);
 }
 
 function submitSheetBackup(url, payload) {
@@ -998,16 +1008,24 @@ function submitSheetBackup(url, payload) {
     form.method = "POST";
     form.action = url;
     form.target = frameName;
+    form.enctype = "application/x-www-form-urlencoded";
+    form.acceptCharset = "UTF-8";
     input.type = "hidden";
     input.name = "payload";
     input.value = payload;
     form.append(input);
     document.body.append(iframe, form);
 
-    iframe.addEventListener("load", () => done());
+    let submitted = false;
+    iframe.addEventListener("load", () => {
+      if (submitted) done();
+    });
     iframe.addEventListener("error", () => done(new Error("sheet backup failed")));
-    form.submit();
-    window.setTimeout(() => done(), 3500);
+    window.setTimeout(() => {
+      submitted = true;
+      form.submit();
+    }, 50);
+    window.setTimeout(() => done(), 6500);
   });
 }
 

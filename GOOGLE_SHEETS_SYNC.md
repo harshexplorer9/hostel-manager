@@ -14,6 +14,7 @@ This updated script supports the app's more reliable hidden-form backup request 
 - Room-wise electricity
 - Current dues report
 - Sync info
+- Backup Debug tab showing payload length and row counts
 
 ## Setup
 
@@ -42,5 +43,6 @@ After that, every room, tenant, payment, electricity, rent setting, or due setti
 ## Check
 
 - Open Google Drive and search `B M Boys Hostel Backup`.
-- The sheet should contain tabs: `Rooms`, `Tenants`, `Payments`, `Electricity`, `Current Report`, `Sync Info`.
+- The sheet should contain tabs: `Rooms`, `Tenants`, `Payments`, `Electricity`, `Current Report`, `Sync Info`, `Backup Debug`.
+- If data does not appear, open `Backup Debug`. `Raw Payload Length` should be more than 0 and room/tenant/payment counts should match the app.
 - If you update Apps Script code later, deploy again as a new version and keep the same Web app URL if Apps Script allows it.
