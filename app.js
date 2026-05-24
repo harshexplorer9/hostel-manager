@@ -557,6 +557,13 @@ function handleCloudError(error) {
   toast(`Cloud sync failed: ${message}`);
 }
 
+function markCloudSynced(label = "Synced") {
+  if (!cloudAuth?.email) return;
+  els.cloudStatus.textContent = `${label}: ${cloudAuth.email}`;
+  els.cloudStatus.classList.add("online");
+  els.cloudStatus.classList.remove("error");
+}
+
 function logoutCloud() {
   saveData(true);
   saveAuth(null);
@@ -644,6 +651,7 @@ async function uploadCloudData(showMessage = true) {
     })
   });
 
+  markCloudSynced();
   if (showMessage) toast("Cloud sync complete");
 }
 
@@ -660,6 +668,7 @@ async function downloadCloudData(uploadIfEmpty = false) {
       saveData(true);
       await uploadCloudData(false);
     }
+    markCloudSynced();
     toast("New cloud account ready");
     return;
   }
@@ -677,6 +686,7 @@ async function downloadCloudData(uploadIfEmpty = false) {
       (parsedRemote.rooms?.length || 0) + (parsedRemote.tenants?.length || 0) + (parsedRemote.payments?.length || 0) + (parsedRemote.electricity?.length || 0) > 0;
     if (!hasRemoteData && (data.rooms.length || data.tenants.length || data.payments.length || data.electricity.length)) {
       await uploadCloudData(false);
+      markCloudSynced();
       toast("Local data restored to cloud");
       return;
     }
@@ -686,6 +696,7 @@ async function downloadCloudData(uploadIfEmpty = false) {
     saveData(true);
     els.unitRate.value = electricityRate();
     renderAll();
+    markCloudSynced();
     toast("Cloud data loaded");
   }
 }
