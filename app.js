@@ -11,6 +11,7 @@ const defaultData = {
     electricityRate: 8.5,
     rentDueDay: 5,
     ownerWhatsapp: "9639875555",
+    sheetSyncUrl: "",
     occupancyRent: {
       1: 2500,
       2: 2800,
@@ -47,6 +48,7 @@ let cloudAuth = loadAuth();
 let data = loadData();
 let currentSearch = "";
 let syncTimer;
+let sheetSyncTimer;
 ensureSettings();
 
 const els = {
@@ -150,6 +152,10 @@ const els = {
   cloudDownload: document.querySelector("#cloudDownload"),
   cloudUpload: document.querySelector("#cloudUpload"),
   cloudLogout: document.querySelector("#cloudLogout"),
+  sheetSyncForm: document.querySelector("#sheetSyncForm"),
+  sheetSyncUrl: document.querySelector("#sheetSyncUrl"),
+  sheetSyncNow: document.querySelector("#sheetSyncNow"),
+  sheetSyncStatus: document.querySelector("#sheetSyncStatus"),
   closeCloudSheet: document.querySelector("#closeCloudSheet")
 };
 
@@ -167,7 +173,10 @@ function loadData() {
 function saveData(skipCloud = false) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   if (cloudAuth?.localId) localStorage.setItem(userDataStorageKey(), JSON.stringify(data));
-  if (!skipCloud) scheduleCloudSave();
+  if (!skipCloud) {
+    scheduleCloudSave();
+    scheduleSheetSync();
+  }
 }
 
 function userDataStorageKey(uid = cloudAuth?.localId) {
@@ -712,6 +721,98 @@ function scheduleCloudSave() {
   }, 900);
 }
 
+function sheetSyncUrl() {
+  return String(data.settings?.sheetSyncUrl || "").trim();
+}
+
+function renderSheetSyncStatus(message) {
+  els.sheetSyncUrl.value = sheetSyncUrl();
+  els.sheetSyncNow.disabled = !sheetSyncUrl();
+  els.sheetSyncStatus.textContent = message || (sheetSyncUrl() ? "Google Sheet sync is enabled." : "Optional: auto-update a Google Sheet in Drive after every app change.");
+}
+
+function buildSpreadsheetPayload() {
+  const month = thisMonth();
+  const reportRows = getMonthlyReport(month);
+  return {
+    hostelName: HOSTEL_NAME,
+    updatedAt: new Date().toISOString(),
+    month,
+    rooms: data.rooms.map((room) => ({
+      number: room.number,
+      floor: room.floor,
+      capacity: roomCapacity(room),
+      activeTenants: roomTenants(room.id).length,
+      rentTotal: occupancyRent(roomTenants(room.id).length || 1),
+      deposit: room.deposit,
+      notes: room.notes
+    })),
+    tenants: data.tenants.map((tenant) => ({
+      name: tenant.name,
+      mobile: tenant.mobile,
+      altMobile: tenant.altMobile,
+      room: tenantRoomLabel(tenant),
+      monthlyRent: tenantRentAmount(tenant),
+      joiningDate: tenant.joinDate,
+      idType: tenant.idType,
+      idNumber: tenant.idNumber,
+      emergency: tenant.emergency,
+      address: tenant.address,
+      status: tenant.status
+    })),
+    payments: data.payments.map((payment) => ({
+      room: paymentRoom(payment)?.number || "",
+      month: payment.month,
+      amount: payment.amount,
+      date: payment.date,
+      mode: payment.mode,
+      remarks: payment.remarks || ""
+    })),
+    electricity: data.electricity.map((bill) => ({
+      room: findRoom(bill.roomId)?.number || "",
+      month: bill.month,
+      previousReading: bill.previousReading,
+      currentReading: bill.currentReading,
+      units: bill.units,
+      rate: bill.rate,
+      fixedCharge: bill.fixedCharge,
+      amount: bill.amount
+    })),
+    report: reportRows.map((row) => ({
+      room: row.room?.number || "",
+      tenant: row.tenant.name,
+      mobile: row.tenant.mobile,
+      rentDue: row.rentDue,
+      electricityDue: row.electricityDue,
+      paid: row.rentPaid,
+      balance: row.balance
+    }))
+  };
+}
+
+async function syncSpreadsheet(showMessage = false) {
+  const url = sheetSyncUrl();
+  if (!url) return;
+
+  await fetch(url, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(buildSpreadsheetPayload())
+  });
+
+  renderSheetSyncStatus(`Sheet update sent: ${new Date().toLocaleTimeString("en-IN")}`);
+  if (showMessage) toast("Spreadsheet update sent");
+}
+
+function scheduleSheetSync() {
+  if (!sheetSyncUrl()) return;
+  window.clearTimeout(sheetSyncTimer);
+  sheetSyncTimer = window.setTimeout(() => {
+    syncSpreadsheet(false).catch(() => renderSheetSyncStatus("Sheet sync failed. Check Apps Script URL."));
+  }, 1200);
+}
+
 function tenantMatchesSearch(tenant) {
   const room = findRoom(tenant.roomId);
   return [tenant.name, tenant.mobile, tenant.altMobile, tenant.idNumber, room?.number]
@@ -1202,6 +1303,7 @@ function renderAll() {
   renderRoomOptions();
   renderTenantOptions();
   renderRentSettings();
+  renderSheetSyncStatus();
   renderDashboard();
   renderRooms();
   renderTenants();
@@ -1468,6 +1570,24 @@ els.cloudDownload.addEventListener("click", async () => {
     await downloadCloudData(false);
   } catch (error) {
     handleCloudError(error);
+  }
+});
+
+els.sheetSyncForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  ensureSettings();
+  data.settings.sheetSyncUrl = els.sheetSyncUrl.value.trim();
+  saveData();
+  renderSheetSyncStatus(data.settings.sheetSyncUrl ? "Google Sheet sync saved." : "Google Sheet sync disabled.");
+  toast(data.settings.sheetSyncUrl ? "Sheet sync saved" : "Sheet sync disabled");
+});
+
+els.sheetSyncNow.addEventListener("click", async () => {
+  try {
+    await syncSpreadsheet(true);
+  } catch {
+    renderSheetSyncStatus("Sheet sync failed. Check Apps Script deployment URL.");
+    toast("Sheet sync failed");
   }
 });
 
