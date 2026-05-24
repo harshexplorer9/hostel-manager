@@ -12,10 +12,10 @@
       content="Manage hostel rooms, tenants, rent payments, room-wise electricity bills, and monthly dues."
     />
     <title>B M Boys Hostel</title>
-    <link rel="manifest" href="manifest.webmanifest?v=26" />
+    <link rel="manifest" href="manifest.webmanifest?v=27" />
     <link rel="icon" href="icons/hostel-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icons/hostel-icon.svg" />
-    <link rel="stylesheet" href="styles.css?v=26" />
+    <link rel="stylesheet" href="styles.css?v=27" />
   </head>
   <body>
     <section id="loginGate" class="login-gate" hidden>
@@ -188,7 +188,10 @@
             <section class="panel list-panel">
               <div class="panel-head">
                 <h3>Rent Payments</h3>
-                <span id="paymentCount" class="pill">0 payments</span>
+                <div class="panel-tools">
+                  <label class="inline-control">Bill Month<select id="paymentListMonth"></select></label>
+                  <span id="paymentCount" class="pill">0 payments</span>
+                </div>
               </div>
               <div id="paymentsTable"></div>
             </section>
@@ -200,7 +203,7 @@
             <form id="electricityForm" class="panel form-panel">
               <h3>Record Electricity Bill</h3>
               <label>Room<select id="electricityRoom" required></select></label>
-              <label>Month<input id="electricityMonth" type="month" required /></label>
+              <label>Month<select id="electricityMonth" required></select></label>
               <label>Previous Reading<input id="previousReading" type="number" min="0" required /></label>
               <label>Current Reading<input id="currentReading" type="number" min="0" required /></label>
               <label>Rate Per Unit<input id="unitRate" type="number" min="0" step="0.01" value="8.5" required /></label>
@@ -217,7 +220,10 @@
             <section class="panel list-panel">
               <div class="panel-head">
                 <h3>Electricity Bills</h3>
-                <span id="electricityCount" class="pill">0 bills</span>
+                <div class="panel-tools">
+                  <label class="inline-control">Bill Month<select id="electricityListMonth"></select></label>
+                  <span id="electricityCount" class="pill">0 bills</span>
+                </div>
               </div>
               <div id="electricityTable"></div>
             </section>
@@ -335,6 +341,6 @@
         projectId: "hostel-manage-4ab56"
       };
     </script>
-    <script src="app.js?v=26"></script>
+    <script src="app.js?v=27"></script>
   </body>
 </html>

@@ -317,6 +317,14 @@ button.secondary:hover,
   margin-bottom: 14px;
 }
 
+.panel-tools {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .panel h3 {
   font-size: 18px;
   margin: 0;

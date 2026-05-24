@@ -104,6 +104,7 @@ const els = {
   paymentForm: document.querySelector("#paymentForm"),
   paymentRoom: document.querySelector("#paymentRoom"),
   paymentMonth: document.querySelector("#paymentMonth"),
+  paymentListMonth: document.querySelector("#paymentListMonth"),
   paymentAmount: document.querySelector("#paymentAmount"),
   paymentDate: document.querySelector("#paymentDate"),
   paymentMode: document.querySelector("#paymentMode"),
@@ -113,6 +114,7 @@ const els = {
   electricityForm: document.querySelector("#electricityForm"),
   electricityRoom: document.querySelector("#electricityRoom"),
   electricityMonth: document.querySelector("#electricityMonth"),
+  electricityListMonth: document.querySelector("#electricityListMonth"),
   previousReading: document.querySelector("#previousReading"),
   currentReading: document.querySelector("#currentReading"),
   unitRate: document.querySelector("#unitRate"),
@@ -908,12 +910,21 @@ function renderRoomOptions() {
 function renderMonthOptions() {
   const months = monthOptions();
   const paymentValue = els.paymentMonth.value || thisMonth();
+  const paymentListValue = els.paymentListMonth.value || paymentValue;
+  const electricityValue = els.electricityMonth.value || thisMonth();
+  const electricityListValue = els.electricityListMonth.value || electricityValue;
   const reportValue = els.reportMonth.value || thisMonth();
   const options = months.map((month) => `<option value="${month}">${escapeHtml(monthLabel(month))}</option>`).join("");
 
   els.paymentMonth.innerHTML = options;
+  els.paymentListMonth.innerHTML = options;
+  els.electricityMonth.innerHTML = options;
+  els.electricityListMonth.innerHTML = options;
   els.reportMonth.innerHTML = options;
   els.paymentMonth.value = months.includes(paymentValue) ? paymentValue : thisMonth();
+  els.paymentListMonth.value = months.includes(paymentListValue) ? paymentListValue : els.paymentMonth.value;
+  els.electricityMonth.value = months.includes(electricityValue) ? electricityValue : thisMonth();
+  els.electricityListMonth.value = months.includes(electricityListValue) ? electricityListValue : els.electricityMonth.value;
   els.reportMonth.value = months.includes(reportValue) ? reportValue : thisMonth();
 }
 
@@ -1148,11 +1159,15 @@ function renderTenants() {
 }
 
 function renderPayments() {
-  const payments = data.payments.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+  const selectedMonth = els.paymentListMonth.value || thisMonth();
+  const payments = data.payments
+    .filter((payment) => payment.month === selectedMonth)
+    .slice()
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
   els.paymentCount.textContent = `${payments.length} payments`;
 
   if (!payments.length) {
-    els.paymentsTable.innerHTML = '<div class="empty">No payments recorded.</div>';
+    els.paymentsTable.innerHTML = `<div class="empty">No payments recorded for ${monthLabel(selectedMonth)}.</div>`;
     return;
   }
 
@@ -1220,10 +1235,12 @@ function calculateElectricity() {
 }
 
 function renderElectricity() {
-  els.electricityCount.textContent = `${data.electricity.length} bills`;
+  const selectedMonth = els.electricityListMonth.value || thisMonth();
+  const bills = data.electricity.filter((bill) => bill.month === selectedMonth);
+  els.electricityCount.textContent = `${bills.length} bills`;
   els.electricityTable.innerHTML = table(
     ["Room", "Month", "Previous", "Current", "Units", "Rate", "Fixed", "Amount", "Actions"],
-    data.electricity
+    bills
       .slice()
       .sort((a, b) => b.month.localeCompare(a.month))
       .map(
@@ -1241,7 +1258,7 @@ function renderElectricity() {
         </tr>
       `
       ),
-    "No electricity bills recorded."
+    `No electricity bills recorded for ${monthLabel(selectedMonth)}.`
   );
 }
 
@@ -1701,11 +1718,12 @@ els.paymentForm.addEventListener("submit", (event) => {
     toast("Add a room before recording payment");
     return;
   }
+  const paymentMonth = els.paymentMonth.value;
 
   data.payments.push({
     id: crypto.randomUUID(),
     roomId: els.paymentRoom.value,
-    month: els.paymentMonth.value,
+    month: paymentMonth,
     amount: Number(els.paymentAmount.value) || 0,
     date: els.paymentDate.value,
     mode: els.paymentMode.value,
@@ -1714,7 +1732,8 @@ els.paymentForm.addEventListener("submit", (event) => {
 
   saveData();
   els.paymentForm.reset();
-  els.paymentMonth.value = thisMonth();
+  els.paymentMonth.value = paymentMonth;
+  els.paymentListMonth.value = paymentMonth;
   els.paymentDate.value = today();
   toast("Payment recorded");
   renderAll();
@@ -1722,6 +1741,7 @@ els.paymentForm.addEventListener("submit", (event) => {
 
 els.paymentRoom.addEventListener("change", fillPaymentAmountFromRoom);
 els.paymentMonth.addEventListener("change", fillPaymentAmountFromRoom);
+els.paymentListMonth.addEventListener("change", renderAll);
 
 ["input", "change"].forEach((eventName) => {
   [els.previousReading, els.currentReading, els.unitRate, els.fixedCharge].forEach((input) => {
@@ -1736,11 +1756,12 @@ els.electricityForm.addEventListener("submit", (event) => {
     return;
   }
 
+  const billMonth = els.electricityMonth.value;
   const { units, amount } = calculateElectricity();
   data.electricity.push({
     id: crypto.randomUUID(),
     roomId: els.electricityRoom.value,
-    month: els.electricityMonth.value,
+    month: billMonth,
     previousReading: Number(els.previousReading.value) || 0,
     currentReading: Number(els.currentReading.value) || 0,
     units,
@@ -1752,13 +1773,15 @@ els.electricityForm.addEventListener("submit", (event) => {
 
   saveData();
   els.electricityForm.reset();
-  els.electricityMonth.value = thisMonth();
+  els.electricityMonth.value = billMonth;
+  els.electricityListMonth.value = billMonth;
   els.unitRate.value = electricityRate();
   els.fixedCharge.value = 0;
   calculateElectricity();
   toast("Electricity bill recorded");
   renderAll();
 });
+els.electricityListMonth.addEventListener("change", renderAll);
 
 els.saveDefaultRate.addEventListener("click", () => {
   const rate = Number(els.unitRate.value);
@@ -1916,8 +1939,10 @@ els.importData.addEventListener("change", async () => {
 });
 
 els.paymentMonth.value = thisMonth();
+els.paymentListMonth.value = thisMonth();
 els.paymentDate.value = today();
 els.electricityMonth.value = thisMonth();
+els.electricityListMonth.value = thisMonth();
 els.reportMonth.value = thisMonth();
 els.unitRate.value = electricityRate();
 resetTenantForm();
