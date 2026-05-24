@@ -533,7 +533,7 @@ async function cloudRequest(url, options) {
   const body = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    const message = body.error?.message || "Cloud request failed";
+    const message = body.error?.message || `Cloud request failed (${response.status})`;
     throw new Error(message.replaceAll("_", " ").toLowerCase());
   }
 
@@ -551,9 +551,12 @@ function handleCloudError(error) {
     return;
   }
 
-  els.cloudStatus.textContent = "Sync failed";
+  els.cloudStatus.textContent = `Sync failed: ${message.slice(0, 42)}`;
   els.cloudStatus.classList.remove("online");
   els.cloudStatus.classList.add("error");
+  if (els.cloudConfigNote) {
+    els.cloudConfigNote.textContent = `Last sync error: ${message}. Check Firebase Auth authorized domain, Firestore rules, and login.`;
+  }
   toast(`Cloud sync failed: ${message}`);
 }
 
