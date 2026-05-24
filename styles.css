@@ -551,13 +551,13 @@ td {
 }
 
 .due-item {
-  align-items: center;
+  align-items: start;
   background: var(--surface-muted);
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) auto;
   padding: 14px;
 }
 

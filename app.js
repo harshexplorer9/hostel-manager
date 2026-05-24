@@ -285,6 +285,11 @@ function dueDateForMonth(month, roomId = "") {
   return `${month}-${String(day).padStart(2, "0")}`;
 }
 
+function lastDueMonthForRoom(roomId) {
+  const current = thisMonth();
+  return daysUntil(dueDateForMonth(current, roomId)) < 0 ? current : shiftMonth(current, -1);
+}
+
 function dateLabel(dateText) {
   if (!dateText) return "";
   const [year, month, day] = dateText.split("-").map(Number);
@@ -993,6 +998,13 @@ function getRoomDueSummaries(month) {
   return Array.from(grouped.values()).sort((a, b) => a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }));
 }
 
+function getPreviousRoomDues() {
+  return data.rooms
+    .flatMap((room) => getRoomDueSummaries(lastDueMonthForRoom(room.id)).filter((summary) => summary.roomId === room.id))
+    .filter((summary) => summary.balanceTotal > 0)
+    .sort((a, b) => b.dueDate.localeCompare(a.dueDate) || a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }));
+}
+
 function renderDashboard() {
   const occupied = data.rooms.filter((room) => roomTenants(room.id).length > 0).length;
   const monthlyRent = activeTenants().reduce((sum, tenant) => sum + tenantRentAmount(tenant), 0);
@@ -1341,7 +1353,9 @@ function dueListHtml(summaries, emptyMessage, label) {
           <div>
             <strong>Room ${escapeHtml(summary.roomNumber)}</strong>
             <span>${escapeHtml(monthLabel(summary.month))} | ${escapeHtml(dateLabel(summary.dueDate))} | ${escapeHtml(dueStatusText(summary))}</span>
-            <small>${escapeHtml(summary.tenants.map((tenant) => `${tenant.name} (${tenant.mobile || "-"})`).join(", "))}</small>
+            <small>${summary.tenants
+              .map((tenant, index) => `${index + 1}. ${escapeHtml(tenant.name)} | Join ${escapeHtml(tenant.joinDate || "-")} | ${escapeHtml(tenant.mobile || "-")}`)
+              .join("<br>")}</small>
           </div>
           <div>
             <strong>${money(summary.balanceTotal)}</strong>
@@ -1356,14 +1370,13 @@ function dueListHtml(summaries, emptyMessage, label) {
 
 function renderDues() {
   renderDueSettings();
-  const previousMonth = shiftMonth(thisMonth(), -1);
-  const previousDues = getRoomDueSummaries(previousMonth).filter((summary) => summary.balanceTotal > 0);
+  const previousDues = getPreviousRoomDues();
   const upcomingDues = upcomingDueMonths()
     .flatMap((month) => getRoomDueSummaries(month))
     .filter((summary) => summary.balanceTotal > 0 && daysUntil(summary.dueDate) >= 0 && daysUntil(summary.dueDate) <= rentDueDay())
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }));
 
-  els.previousDuesList.innerHTML = dueListHtml(previousDues, "No previous month pending dues.", "Previous month rent pending");
+  els.previousDuesList.innerHTML = dueListHtml(previousDues, "No previous billing-cycle pending dues.", "Previous billing-cycle rent pending");
   els.upcomingDuesList.innerHTML = dueListHtml(upcomingDues, `No room dues in the next ${rentDueDay()} days.`, "Upcoming rent due");
   els.sendAllPreviousDues.disabled = previousDues.length === 0;
   els.sendAllUpcomingDues.disabled = upcomingDues.length === 0;
@@ -1778,11 +1791,10 @@ document.addEventListener("click", (event) => {
 
   const ownerSummary = target.dataset.ownerSummary;
   if (ownerSummary) {
-    const previousMonth = shiftMonth(thisMonth(), -1);
     const title = ownerSummary === "previous" ? "Previous month pending room dues" : "Upcoming room rent dues";
     const summaries =
       ownerSummary === "previous"
-        ? getRoomDueSummaries(previousMonth).filter((summary) => summary.balanceTotal > 0)
+        ? getPreviousRoomDues()
         : upcomingDueMonths()
             .flatMap((month) => getRoomDueSummaries(month))
             .filter((summary) => summary.balanceTotal > 0 && daysUntil(summary.dueDate) >= 0 && daysUntil(summary.dueDate) <= rentDueDay())
