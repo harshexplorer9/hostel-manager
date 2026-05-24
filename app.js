@@ -230,7 +230,7 @@ function electricityRate() {
 
 function rentDueDay() {
   const day = Number(data.settings?.rentDueDay);
-  return Math.min(Math.max(Number.isFinite(day) ? day : 5, 1), 28);
+  return Math.min(Math.max(Number.isFinite(day) ? day : 5, 1), 30);
 }
 
 function ownerWhatsapp() {
@@ -268,8 +268,21 @@ function shiftMonth(month, offset) {
   return date.toISOString().slice(0, 7);
 }
 
-function dueDateForMonth(month) {
-  return `${month}-${String(rentDueDay()).padStart(2, "0")}`;
+function daysInMonth(month) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  return new Date(year, monthNumber, 0).getDate();
+}
+
+function dueDayForRoom(roomId) {
+  const days = roomTenants(roomId)
+    .map((tenant) => Number(tenant.joinDate?.slice(8, 10)))
+    .filter((day) => Number.isFinite(day) && day > 0);
+  return days.length ? Math.min(...days) : 1;
+}
+
+function dueDateForMonth(month, roomId = "") {
+  const day = Math.min(dueDayForRoom(roomId), daysInMonth(month));
+  return `${month}-${String(day).padStart(2, "0")}`;
 }
 
 function dateLabel(dateText) {
@@ -924,6 +937,17 @@ function renderDueSettings() {
   }
 }
 
+function upcomingDueMonths(windowDays = rentDueDay()) {
+  const todayDate = new Date(`${localDate()}T00:00:00`);
+  const months = new Set();
+  for (let offset = -1; offset <= windowDays + 31; offset += 1) {
+    const date = new Date(todayDate);
+    date.setDate(todayDate.getDate() + offset);
+    months.add(date.toISOString().slice(0, 7));
+  }
+  return Array.from(months);
+}
+
 function roomRentTotal(roomId) {
   return roomTenants(roomId).reduce((sum, tenant) => sum + tenantRentAmount(tenant), 0);
 }
@@ -949,7 +973,7 @@ function getRoomDueSummaries(month) {
         roomId: row.room?.id || "",
         roomNumber: row.room?.number || "-",
         month,
-        dueDate: dueDateForMonth(month),
+        dueDate: dueDateForMonth(month, row.room?.id || ""),
         tenants: [],
         rentTotal: 0,
         electricityTotal: 0,
@@ -1333,13 +1357,14 @@ function dueListHtml(summaries, emptyMessage, label) {
 function renderDues() {
   renderDueSettings();
   const previousMonth = shiftMonth(thisMonth(), -1);
-  const currentDueDate = dueDateForMonth(thisMonth());
-  const upcomingMonth = daysUntil(currentDueDate) >= 0 ? thisMonth() : shiftMonth(thisMonth(), 1);
   const previousDues = getRoomDueSummaries(previousMonth).filter((summary) => summary.balanceTotal > 0);
-  const upcomingDues = getRoomDueSummaries(upcomingMonth).filter((summary) => summary.balanceTotal > 0);
+  const upcomingDues = upcomingDueMonths()
+    .flatMap((month) => getRoomDueSummaries(month))
+    .filter((summary) => summary.balanceTotal > 0 && daysUntil(summary.dueDate) >= 0 && daysUntil(summary.dueDate) <= rentDueDay())
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }));
 
   els.previousDuesList.innerHTML = dueListHtml(previousDues, "No previous month pending dues.", "Previous month rent pending");
-  els.upcomingDuesList.innerHTML = dueListHtml(upcomingDues, "No upcoming room dues.", "Upcoming rent due");
+  els.upcomingDuesList.innerHTML = dueListHtml(upcomingDues, `No room dues in the next ${rentDueDay()} days.`, "Upcoming rent due");
   els.sendAllPreviousDues.disabled = previousDues.length === 0;
   els.sendAllUpcomingDues.disabled = upcomingDues.length === 0;
   els.sendAllPreviousDues.dataset.ownerSummary = "previous";
@@ -1383,7 +1408,9 @@ function setupInstallExperience() {
 async function showDueNotification() {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
 
-  const dueToday = getRoomDueSummaries(thisMonth()).filter((summary) => summary.balanceTotal > 0 && daysUntil(summary.dueDate) === 0);
+  const dueToday = upcomingDueMonths(1)
+    .flatMap((month) => getRoomDueSummaries(month))
+    .filter((summary) => summary.balanceTotal > 0 && daysUntil(summary.dueDate) === 0);
   if (!dueToday.length) return;
 
   const notifyKey = `${localDate()}-${dueToday.map((summary) => summary.roomId).join("-")}`;
@@ -1752,11 +1779,14 @@ document.addEventListener("click", (event) => {
   const ownerSummary = target.dataset.ownerSummary;
   if (ownerSummary) {
     const previousMonth = shiftMonth(thisMonth(), -1);
-    const currentDueDate = dueDateForMonth(thisMonth());
-    const upcomingMonth = daysUntil(currentDueDate) >= 0 ? thisMonth() : shiftMonth(thisMonth(), 1);
-    const month = ownerSummary === "previous" ? previousMonth : upcomingMonth;
     const title = ownerSummary === "previous" ? "Previous month pending room dues" : "Upcoming room rent dues";
-    const summaries = getRoomDueSummaries(month).filter((summary) => summary.balanceTotal > 0);
+    const summaries =
+      ownerSummary === "previous"
+        ? getRoomDueSummaries(previousMonth).filter((summary) => summary.balanceTotal > 0)
+        : upcomingDueMonths()
+            .flatMap((month) => getRoomDueSummaries(month))
+            .filter((summary) => summary.balanceTotal > 0 && daysUntil(summary.dueDate) >= 0 && daysUntil(summary.dueDate) <= rentDueDay())
+            .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }));
     window.open(ownerWhatsappLink(buildOwnerSummaryMessage(title, summaries)), "_blank", "noopener");
   }
 
