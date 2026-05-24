@@ -308,6 +308,23 @@ function monthLabel(month) {
   });
 }
 
+function monthOptions(rangeBefore = 18, rangeAfter = 6) {
+  const current = thisMonth();
+  const months = new Set([current]);
+  [...data.payments, ...data.electricity].forEach((item) => {
+    if (item.month) months.add(item.month);
+  });
+  data.tenants.forEach((tenant) => {
+    if (tenant.joinDate) months.add(tenant.joinDate.slice(0, 7));
+  });
+
+  for (let offset = -rangeBefore; offset <= rangeAfter; offset += 1) {
+    months.add(shiftMonth(current, offset));
+  }
+
+  return Array.from(months).sort((a, b) => b.localeCompare(a));
+}
+
 function toast(message) {
   els.toast.textContent = message;
   els.toast.classList.add("show");
@@ -858,6 +875,18 @@ function renderRoomOptions() {
   els.paymentRoom.innerHTML = roomOptions || '<option value="">Add a room first</option>';
 }
 
+function renderMonthOptions() {
+  const months = monthOptions();
+  const paymentValue = els.paymentMonth.value || thisMonth();
+  const reportValue = els.reportMonth.value || thisMonth();
+  const options = months.map((month) => `<option value="${month}">${escapeHtml(monthLabel(month))}</option>`).join("");
+
+  els.paymentMonth.innerHTML = options;
+  els.reportMonth.innerHTML = options;
+  els.paymentMonth.value = months.includes(paymentValue) ? paymentValue : thisMonth();
+  els.reportMonth.value = months.includes(reportValue) ? reportValue : thisMonth();
+}
+
 function renderTenantOptions() {
   return activeTenants()
     .slice()
@@ -889,8 +918,16 @@ function roomRentTotal(roomId) {
   return roomTenants(roomId).reduce((sum, tenant) => sum + tenantRentAmount(tenant), 0);
 }
 
+function roomBalanceForMonth(roomId, month) {
+  return getMonthlyReport(month)
+    .filter((row) => row.room?.id === roomId)
+    .reduce((sum, row) => sum + row.balance, 0);
+}
+
 function fillPaymentAmountFromRoom() {
-  if (els.paymentRoom.value) els.paymentAmount.value = roomRentTotal(els.paymentRoom.value);
+  if (!els.paymentRoom.value) return;
+  const balance = roomBalanceForMonth(els.paymentRoom.value, els.paymentMonth.value || thisMonth());
+  els.paymentAmount.value = balance || roomRentTotal(els.paymentRoom.value);
 }
 
 function getRoomDueSummaries(month) {
@@ -1185,7 +1222,7 @@ function renderReports() {
   const rows = getMonthlyReport(month);
 
   if (!rows.length) {
-    els.reportsTable.innerHTML = `<div class="empty">No active tenants for ${month}.</div>`;
+    els.reportsTable.innerHTML = `<div class="empty">No active tenants for ${monthLabel(month)}.</div>`;
     return;
   }
 
@@ -1301,6 +1338,7 @@ function renderDues() {
 
 function renderAll() {
   renderRoomOptions();
+  renderMonthOptions();
   renderTenantOptions();
   renderRentSettings();
   renderSheetSyncStatus();
@@ -1621,6 +1659,7 @@ els.paymentForm.addEventListener("submit", (event) => {
 });
 
 els.paymentRoom.addEventListener("change", fillPaymentAmountFromRoom);
+els.paymentMonth.addEventListener("change", fillPaymentAmountFromRoom);
 
 ["input", "change"].forEach((eventName) => {
   [els.previousReading, els.currentReading, els.unitRate, els.fixedCharge].forEach((input) => {
