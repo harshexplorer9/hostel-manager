@@ -620,6 +620,15 @@ function buildPaymentSlipMessage(payment) {
     .join("\n");
 }
 
+function paymentTenantSlipButtons(payment) {
+  const tenants = paymentTenants(payment).filter((tenant) => tenant.mobile);
+  if (!tenants.length) return '<span class="empty-inline">No tenant mobile</span>';
+
+  return tenants
+    .map((tenant) => `<button data-payment-slip="${payment.id}" data-payment-slip-tenant="${tenant.id}">WhatsApp ${escapeHtml(tenant.name)}</button>`)
+    .join("");
+}
+
 function buildMoveOutSettlementMessage(tenant) {
   const room = findRoom(tenant.roomId);
   const settlementDate = tenant.leaveDate || localDate();
@@ -1585,7 +1594,7 @@ function renderPayments() {
                 <td>${escapeHtml(payment.remarks || "-")}</td>
                 <td class="row-actions">
                   <button data-edit-payment="${payment.id}">Edit</button>
-                  <button data-payment-room-slip="${payment.id}">Room Slip</button>
+                  ${paymentTenantSlipButtons(payment)}
                   <button class="danger" data-delete-payment="${payment.id}">Delete</button>
                 </td>
               </tr>
@@ -2207,6 +2216,8 @@ els.paymentForm.addEventListener("submit", (event) => {
   els.paymentElectricityAmount.value = 0;
   toast(existing ? "Payment updated" : "Payment recorded");
   renderAll();
+  const slipTenant = paymentTenants(payment).find((tenant) => tenant.mobile);
+  if (slipTenant) openContactSheet(slipTenant, buildPaymentSlipMessage(payment));
 });
 
 els.paymentRoom.addEventListener("change", fillPaymentAmountFromRoom);
