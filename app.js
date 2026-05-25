@@ -60,6 +60,7 @@ const els = {
   gateLoginMessage: document.querySelector("#gateLoginMessage"),
   viewTitle: document.querySelector("#viewTitle"),
   globalSearch: document.querySelector("#globalSearch"),
+  exportExcel: document.querySelector("#exportExcel"),
   exportData: document.querySelector("#exportData"),
   importData: document.querySelector("#importData"),
   toast: document.querySelector("#toast"),
@@ -1028,6 +1029,52 @@ function buildSpreadsheetPayload() {
       balance: row.balance
     }))
   };
+}
+
+function excelCell(value) {
+  return `<td>${escapeHtml(value ?? "")}</td>`;
+}
+
+function excelRows(headers, rows) {
+  return `
+    <table>
+      <thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map((row) => `<tr>${row.map(excelCell).join("")}</tr>`).join("")}</tbody>
+    </table>
+  `;
+}
+
+function buildExcelBackupHtml() {
+  const payload = buildSpreadsheetPayload();
+  return `
+    <html>
+      <head>
+        <meta charset="UTF-8" />
+        <style>
+          body { font-family: Arial, sans-serif; }
+          h1 { margin-bottom: 4px; }
+          h2 { background: #dff4ea; border: 1px solid #9fcab7; padding: 8px; }
+          table { border-collapse: collapse; margin-bottom: 24px; width: 100%; }
+          th, td { border: 1px solid #999; padding: 6px; text-align: left; }
+          th { background: #f1f5f2; }
+        </style>
+      </head>
+      <body>
+        <h1>${escapeHtml(HOSTEL_NAME)} Backup</h1>
+        <p>Generated: ${escapeHtml(new Date().toLocaleString("en-IN"))}</p>
+        <h2>Rooms</h2>
+        ${excelRows(["Room", "Floor", "Capacity", "Active Tenants", "Room Rent Total", "Deposit", "Notes"], payload.rooms.map((row) => [row.number, row.floor, row.capacity, row.activeTenants, row.rentTotal, row.deposit, row.notes]))}
+        <h2>Tenants</h2>
+        ${excelRows(["Name", "Mobile", "Alt Mobile", "Room", "Monthly Rent", "Joining Date", "Leaving Date", "ID Type", "ID Number", "Documents", "Emergency", "Address", "Status"], payload.tenants.map((row) => [row.name, row.mobile, row.altMobile, row.room, row.monthlyRent, row.joiningDate, row.leavingDate, row.idType, row.idNumber, row.documents, row.emergency, row.address, row.status]))}
+        <h2>Payments</h2>
+        ${excelRows(["Room", "Month", "Rent Paid", "Electricity Paid", "Total", "Date", "Mode", "Remarks"], payload.payments.map((row) => [row.room, row.month, row.rentAmount, row.electricityAmount, row.amount, row.date, row.mode, row.remarks]))}
+        <h2>Electricity</h2>
+        ${excelRows(["Room", "Month", "Reading Date", "Previous", "Current", "Units", "Rate", "Fixed Charge", "Amount"], payload.electricity.map((row) => [row.room, row.month, row.readingDate, row.previousReading, row.currentReading, row.units, row.rate, row.fixedCharge, row.amount]))}
+        <h2>Current Report</h2>
+        ${excelRows(["Room", "Tenant", "Mobile", "Rent Due", "Electricity Due", "Rent Paid", "Electricity Paid", "Total Paid", "Balance"], payload.report.map((row) => [row.room, row.tenant, row.mobile, row.rentDue, row.electricityDue, row.rentPaid, row.electricityPaid, row.paid, row.balance]))}
+      </body>
+    </html>
+  `;
 }
 
 async function syncSpreadsheet(showMessage = false) {
@@ -2485,6 +2532,20 @@ els.exportData.addEventListener("click", () => {
   link.download = `hostel-manager-${today()}.json`;
   link.click();
   URL.revokeObjectURL(url);
+});
+
+els.exportExcel.addEventListener("click", () => {
+  ensureSettings();
+  data.settings.lastExportAt = new Date().toISOString();
+  saveData(true);
+  const blob = new Blob([buildExcelBackupHtml()], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `hostel-manager-backup-${today()}.xls`;
+  link.click();
+  URL.revokeObjectURL(url);
+  toast("Excel backup downloaded");
 });
 
 els.importData.addEventListener("change", async () => {
