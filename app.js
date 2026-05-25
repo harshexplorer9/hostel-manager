@@ -116,6 +116,7 @@ const els = {
   paymentMonth: document.querySelector("#paymentMonth"),
   paymentListMonth: document.querySelector("#paymentListMonth"),
   paymentAmount: document.querySelector("#paymentAmount"),
+  paymentElectricityAmount: document.querySelector("#paymentElectricityAmount"),
   paymentDate: document.querySelector("#paymentDate"),
   paymentMode: document.querySelector("#paymentMode"),
   paymentRemarks: document.querySelector("#paymentRemarks"),
@@ -535,9 +536,9 @@ function paymentsForDate(date = localDate()) {
 
 function collectionSummary(date = localDate()) {
   const payments = paymentsForDate(date);
-  const total = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const total = payments.reduce((sum, payment) => sum + paymentTotalAmount(payment), 0);
   const modes = payments.reduce((acc, payment) => {
-    acc[payment.mode] = (acc[payment.mode] || 0) + Number(payment.amount || 0);
+    acc[payment.mode] = (acc[payment.mode] || 0) + paymentTotalAmount(payment);
     return acc;
   }, {});
   return { payments, total, modes };
@@ -554,7 +555,7 @@ function buildDueMessage(row, month) {
     `Room: ${row.room?.number || "-"}`,
     `Rent: ${money(row.rentDue)}`,
     `Electricity bill: ${money(row.electricityDue)}`,
-    `Paid: ${money(row.rentPaid)}`,
+    `Paid: ${money(row.paidTotal)}`,
     `Total balance: ${money(row.balance)}`,
     "Please clear the due amount as soon as possible."
   ].join("\n");
@@ -572,15 +573,27 @@ function paymentTenants(payment) {
   return tenant ? [tenant] : [];
 }
 
+function paymentRentAmount(payment) {
+  return Number(payment.rentAmount ?? payment.amount) || 0;
+}
+
+function paymentElectricityAmount(payment) {
+  return Number(payment.electricityAmount) || 0;
+}
+
+function paymentTotalAmount(payment) {
+  return paymentRentAmount(payment) + paymentElectricityAmount(payment);
+}
+
 function buildPaymentSlipMessage(payment) {
   const room = paymentRoom(payment);
   const rows = getMonthlyReport(payment.month).filter((row) => row.room?.id === room?.id);
   const tenants = rows.map((row) => row.tenant);
   const rentDue = rows.reduce((sum, row) => sum + row.rentDue, 0);
   const electricityDue = rows.reduce((sum, row) => sum + row.electricityDue, 0);
-  const paidTotal = rows.reduce((sum, row) => sum + row.rentPaid, 0);
-  const rentPaid = Math.min(paidTotal, rentDue);
-  const electricityPaid = Math.min(Math.max(paidTotal - rentDue, 0), electricityDue);
+  const paidTotal = rows.reduce((sum, row) => sum + row.paidTotal, 0);
+  const rentPaid = rows.reduce((sum, row) => sum + row.rentPaid, 0);
+  const electricityPaid = rows.reduce((sum, row) => sum + row.electricityPaid, 0);
   const balance = Math.max(rentDue + electricityDue - paidTotal, 0);
 
   return [
@@ -588,7 +601,7 @@ function buildPaymentSlipMessage(payment) {
     `Room: ${room?.number || "-"}`,
     tenants.length ? `Tenants: ${tenants.map((item) => item.name).join(", ")}` : "",
     `Month: ${monthLabel(payment.month)}`,
-    `Receipt amount: ${money(payment.amount)}`,
+    `Receipt amount: ${money(paymentTotalAmount(payment))}`,
     `Rent due: ${money(rentDue)}`,
     `Rent paid: ${money(rentPaid)}`,
     `Electricity due: ${money(electricityDue)}`,
@@ -612,8 +625,8 @@ function buildMoveOutSettlementMessage(tenant) {
   const row = getMonthlyReport(month).find((item) => item.tenant.id === tenant.id);
   const rentDue = row?.rentDue ?? tenantRentAmount(tenant);
   const electricityDue = row?.electricityDue ?? 0;
-  const rentPaid = row?.rentPaid ?? 0;
-  const balance = Math.max(rentDue + electricityDue - rentPaid, 0);
+  const paidTotal = row?.paidTotal ?? 0;
+  const balance = Math.max(rentDue + electricityDue - paidTotal, 0);
   const deposit = Number(room?.deposit || 0);
   const suggestedRefund = Math.max(deposit - balance, 0);
   const deduction = Math.min(balance, deposit);
@@ -628,7 +641,7 @@ function buildMoveOutSettlementMessage(tenant) {
     `Settlement month: ${monthLabel(month)}`,
     `Rent due: ${money(rentDue)}`,
     `Electricity due: ${money(electricityDue)}`,
-    `Paid: ${money(rentPaid)}`,
+    `Paid: ${money(paidTotal)}`,
     `Pending balance: ${money(balance)}`,
     `Deposit on record: ${money(deposit)}`,
     `Deposit deduction: ${money(deduction)}`,
@@ -972,7 +985,9 @@ function buildSpreadsheetPayload() {
     payments: data.payments.map((payment) => ({
       room: paymentRoom(payment)?.number || "",
       month: payment.month,
-      amount: payment.amount,
+      rentAmount: paymentRentAmount(payment),
+      electricityAmount: paymentElectricityAmount(payment),
+      amount: paymentTotalAmount(payment),
       date: payment.date,
       mode: payment.mode,
       remarks: payment.remarks || ""
@@ -994,7 +1009,9 @@ function buildSpreadsheetPayload() {
       mobile: row.tenant.mobile,
       rentDue: row.rentDue,
       electricityDue: row.electricityDue,
-      paid: row.rentPaid,
+      rentPaid: row.rentPaid,
+      electricityPaid: row.electricityPaid,
+      paid: row.paidTotal,
       balance: row.balance
     }))
   };
@@ -1199,10 +1216,25 @@ function roomBalanceForMonth(roomId, month) {
     .reduce((sum, row) => sum + row.balance, 0);
 }
 
+function roomRentBalanceForMonth(roomId, month) {
+  return getMonthlyReport(month)
+    .filter((row) => row.room?.id === roomId)
+    .reduce((sum, row) => sum + Math.max(row.rentDue - row.rentPaid, 0), 0);
+}
+
+function roomElectricityBalanceForMonth(roomId, month) {
+  return getMonthlyReport(month)
+    .filter((row) => row.room?.id === roomId)
+    .reduce((sum, row) => sum + Math.max(row.electricityDue - row.electricityPaid, 0), 0);
+}
+
 function fillPaymentAmountFromRoom() {
   if (!els.paymentRoom.value) return;
-  const balance = roomBalanceForMonth(els.paymentRoom.value, els.paymentMonth.value || thisMonth());
-  els.paymentAmount.value = balance || roomRentTotal(els.paymentRoom.value);
+  const month = els.paymentMonth.value || thisMonth();
+  const rentBalance = roomRentBalanceForMonth(els.paymentRoom.value, month);
+  const electricityBalance = roomElectricityBalanceForMonth(els.paymentRoom.value, month);
+  els.paymentAmount.value = rentBalance || roomRentTotal(els.paymentRoom.value);
+  els.paymentElectricityAmount.value = electricityBalance || 0;
 }
 
 function getRoomDueSummaries(month) {
@@ -1227,7 +1259,7 @@ function getRoomDueSummaries(month) {
     summary.tenants.push(row.tenant);
     summary.rentTotal += row.rentDue;
     summary.electricityTotal += row.electricityDue;
-    summary.paidTotal += row.rentPaid;
+    summary.paidTotal += row.paidTotal;
     summary.balanceTotal += row.balance;
   });
 
@@ -1337,7 +1369,7 @@ function renderDashboard() {
       </div>
       ${todaySummary.payments
         .slice(0, 6)
-        .map((payment) => `<div class="status-item"><div><strong>Room ${escapeHtml(paymentRoom(payment)?.number || "-")}</strong><span>${escapeHtml(payment.mode)} | ${escapeHtml(payment.remarks || "Rent payment")}</span></div><span>${money(payment.amount)}</span></div>`)
+        .map((payment) => `<div class="status-item"><div><strong>Room ${escapeHtml(paymentRoom(payment)?.number || "-")}</strong><span>Rent ${money(paymentRentAmount(payment))} | Electricity ${money(paymentElectricityAmount(payment))}</span></div><span>${money(paymentTotalAmount(payment))}</span></div>`)
         .join("")}
     `
     : '<div class="empty">No collection recorded today.</div>';
@@ -1528,20 +1560,24 @@ function renderPayments() {
   els.paymentsTable.innerHTML = Array.from(grouped.values())
     .sort((a, b) => a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }))
     .map((group) => {
-      const total = group.payments.reduce((sum, item) => sum + Number(item.payment.amount || 0), 0);
+      const rentTotal = group.payments.reduce((sum, item) => sum + paymentRentAmount(item.payment), 0);
+      const electricityTotal = group.payments.reduce((sum, item) => sum + paymentElectricityAmount(item.payment), 0);
+      const total = rentTotal + electricityTotal;
       return `
         <section class="room-report tenant-room-group">
           <div class="room-report-head">
             <strong>Room ${escapeHtml(group.roomNumber)} Payments</strong>
-            <span>${group.payments.length} payments | ${money(total)}</span>
+            <span>${group.payments.length} payments | Rent ${money(rentTotal)} | Electricity ${money(electricityTotal)}</span>
           </div>
           ${table(
-            ["Room", "Month", "Amount", "Date", "Mode", "Remarks", "Slip"],
+            ["Room", "Month", "Rent Paid", "Electricity Paid", "Total", "Date", "Mode", "Remarks", "Slip"],
             group.payments.map(({ payment }) => `
               <tr>
                 <td><strong>Room ${escapeHtml(group.roomNumber)}</strong></td>
                 <td>${escapeHtml(payment.month)}</td>
-                <td>${money(payment.amount)}</td>
+                <td>${money(paymentRentAmount(payment))}</td>
+                <td>${money(paymentElectricityAmount(payment))}</td>
+                <td>${money(paymentTotalAmount(payment))}</td>
                 <td>${escapeHtml(payment.date)}</td>
                 <td>${escapeHtml(payment.mode)}</td>
                 <td>${escapeHtml(payment.remarks || "-")}</td>
@@ -1659,18 +1695,24 @@ function getMonthlyReport(month) {
     const rentDue = tenantRentAmountForMonth(tenant, month);
     const tenantDirectPaid = data.payments
       .filter((payment) => payment.tenantId === tenant.id && payment.month === month)
-      .reduce((sum, payment) => sum + Number(payment.amount), 0);
-    const roomPaymentTotal = data.payments
+      .reduce((sum, payment) => sum + paymentRentAmount(payment), 0);
+    const roomRentPaymentTotal = data.payments
       .filter((payment) => payment.roomId === tenant.roomId && payment.month === month)
-      .reduce((sum, payment) => sum + Number(payment.amount), 0);
+      .reduce((sum, payment) => sum + paymentRentAmount(payment), 0);
+    const roomElectricityPaymentTotal = data.payments
+      .filter((payment) => payment.roomId === tenant.roomId && payment.month === month)
+      .reduce((sum, payment) => sum + paymentElectricityAmount(payment), 0);
     const electricityDue = data.electricity
       .filter((bill) => bill.roomId === tenant.roomId && bill.month === month)
       .reduce((sum, bill) => sum + Number(bill.amount), 0);
     const roomActiveTenants = Math.max(roomTenantsForMonth(tenant.roomId, month).length, 1);
-    const roomPaidShare = roomPaymentTotal / roomActiveTenants;
+    const roomPaidShare = roomRentPaymentTotal / roomActiveTenants;
+    const roomElectricityPaidShare = roomElectricityPaymentTotal / roomActiveTenants;
     const rentPaid = tenantDirectPaid + roomPaidShare;
     const tenantElectricity = electricityDue / roomActiveTenants;
+    const electricityPaid = roomElectricityPaidShare;
     const totalDue = rentDue + tenantElectricity;
+    const paidTotal = rentPaid + electricityPaid;
 
     return {
       tenant,
@@ -1678,8 +1720,10 @@ function getMonthlyReport(month) {
       rentDue,
       rentPaid,
       electricityDue: tenantElectricity,
+      electricityPaid,
+      paidTotal,
       totalDue,
-      balance: Math.max(totalDue - rentPaid, 0)
+      balance: Math.max(totalDue - paidTotal, 0)
     };
   });
 }
@@ -1710,7 +1754,9 @@ function renderReports() {
     .map((group) => {
       const rentTotal = group.rows.reduce((sum, row) => sum + row.rentDue, 0);
       const electricityTotal = group.rows.reduce((sum, row) => sum + row.electricityDue, 0);
-      const paidTotal = group.rows.reduce((sum, row) => sum + row.rentPaid, 0);
+      const rentPaidTotal = group.rows.reduce((sum, row) => sum + row.rentPaid, 0);
+      const electricityPaidTotal = group.rows.reduce((sum, row) => sum + row.electricityPaid, 0);
+      const paidTotal = group.rows.reduce((sum, row) => sum + row.paidTotal, 0);
       const balanceTotal = group.rows.reduce((sum, row) => sum + row.balance, 0);
 
       return `
@@ -1720,7 +1766,7 @@ function renderReports() {
             <span>Balance ${money(balanceTotal)}</span>
           </div>
           ${table(
-            ["Tenant", "Rent Due", "Electricity", "Paid", "Balance", "Send Due"],
+            ["Tenant", "Rent Due", "Electricity", "Rent Paid", "Elec. Paid", "Balance", "Send Due"],
             [
               ...group.rows.map(
                 (row) => `
@@ -1729,6 +1775,7 @@ function renderReports() {
                   <td>${money(row.rentDue)}</td>
                   <td>${money(row.electricityDue)}</td>
                   <td>${money(row.rentPaid)}</td>
+                  <td>${money(row.electricityPaid)}</td>
                   <td><strong>${money(row.balance)}</strong></td>
                   <td>
                     <button class="due-button" data-due-tenant="${row.tenant.id}" ${row.balance <= 0 ? "disabled" : ""}>
@@ -1743,7 +1790,8 @@ function renderReports() {
                   <td><strong>Room Total</strong></td>
                   <td>${money(rentTotal)}</td>
                   <td>${money(electricityTotal)}</td>
-                  <td>${money(paidTotal)}</td>
+                  <td>${money(rentPaidTotal)}</td>
+                  <td>${money(electricityPaidTotal)}</td>
                   <td><strong>${money(balanceTotal)}</strong></td>
                   <td></td>
                 </tr>
@@ -2122,12 +2170,16 @@ els.paymentForm.addEventListener("submit", (event) => {
     return;
   }
   const paymentMonth = els.paymentMonth.value;
+  const rentAmount = Number(els.paymentAmount.value) || 0;
+  const electricityAmount = Number(els.paymentElectricityAmount.value) || 0;
 
   data.payments.push({
     id: crypto.randomUUID(),
     roomId: els.paymentRoom.value,
     month: paymentMonth,
-    amount: Number(els.paymentAmount.value) || 0,
+    rentAmount,
+    electricityAmount,
+    amount: rentAmount + electricityAmount,
     date: els.paymentDate.value,
     mode: els.paymentMode.value,
     remarks: els.paymentRemarks.value.trim()
@@ -2138,6 +2190,7 @@ els.paymentForm.addEventListener("submit", (event) => {
   els.paymentMonth.value = paymentMonth;
   els.paymentListMonth.value = paymentMonth;
   els.paymentDate.value = today();
+  els.paymentElectricityAmount.value = 0;
   toast("Payment recorded");
   renderAll();
 });

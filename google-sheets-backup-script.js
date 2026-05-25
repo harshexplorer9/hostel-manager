@@ -79,8 +79,8 @@ function doPost(e) {
   ]);
 
   writeSheet(spreadsheet, "Payments", [
-    ["Room", "Month", "Amount", "Date", "Mode", "Remarks"],
-    ...(payload.payments || []).map((row) => [row.room, row.month, row.amount, row.date, row.mode, row.remarks])
+    ["Room", "Month", "Rent Paid", "Electricity Paid", "Total", "Date", "Mode", "Remarks"],
+    ...(payload.payments || []).map((row) => [row.room, row.month, row.rentAmount, row.electricityAmount, row.amount, row.date, row.mode, row.remarks])
   ]);
 
   writeSheet(spreadsheet, "Electricity", [
@@ -99,8 +99,18 @@ function doPost(e) {
   ]);
 
   writeSheet(spreadsheet, "Current Report", [
-    ["Room", "Tenant", "Mobile", "Rent Due", "Electricity Due", "Paid", "Balance"],
-    ...(payload.report || []).map((row) => [row.room, row.tenant, row.mobile, row.rentDue, row.electricityDue, row.paid, row.balance])
+    ["Room", "Tenant", "Mobile", "Rent Due", "Electricity Due", "Rent Paid", "Electricity Paid", "Total Paid", "Balance"],
+    ...(payload.report || []).map((row) => [
+      row.room,
+      row.tenant,
+      row.mobile,
+      row.rentDue,
+      row.electricityDue,
+      row.rentPaid,
+      row.electricityPaid,
+      row.paid,
+      row.balance
+    ])
   ]);
 
   writeSheet(spreadsheet, "Sync Info", [
