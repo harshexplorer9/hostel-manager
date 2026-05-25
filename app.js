@@ -1517,6 +1517,7 @@ function renderPayments() {
     const key = room?.id || "deleted-room";
     if (!grouped.has(key)) {
       grouped.set(key, {
+        roomId: room?.id || "",
         roomNumber: room?.number || "Deleted room",
         payments: []
       });
@@ -1525,12 +1526,13 @@ function renderPayments() {
   });
 
   els.paymentsTable.innerHTML = Array.from(grouped.values())
+    .sort((a, b) => a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }))
     .map((group) => {
       const total = group.payments.reduce((sum, item) => sum + Number(item.payment.amount || 0), 0);
       return `
-        <section class="room-report">
+        <section class="room-report tenant-room-group">
           <div class="room-report-head">
-            <strong>Room ${escapeHtml(group.roomNumber)}</strong>
+            <strong>Room ${escapeHtml(group.roomNumber)} Payments</strong>
             <span>${group.payments.length} payments | ${money(total)}</span>
           </div>
           ${table(
