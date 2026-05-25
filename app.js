@@ -112,6 +112,7 @@ const els = {
   tenantCount: document.querySelector("#tenantCount"),
   tenantListMonth: document.querySelector("#tenantListMonth"),
   paymentForm: document.querySelector("#paymentForm"),
+  paymentId: document.querySelector("#paymentId"),
   paymentRoom: document.querySelector("#paymentRoom"),
   paymentMonth: document.querySelector("#paymentMonth"),
   paymentListMonth: document.querySelector("#paymentListMonth"),
@@ -123,6 +124,7 @@ const els = {
   paymentsTable: document.querySelector("#paymentsTable"),
   paymentCount: document.querySelector("#paymentCount"),
   electricityForm: document.querySelector("#electricityForm"),
+  electricityId: document.querySelector("#electricityId"),
   electricityRoom: document.querySelector("#electricityRoom"),
   electricityMonth: document.querySelector("#electricityMonth"),
   electricityListMonth: document.querySelector("#electricityListMonth"),
@@ -1582,6 +1584,7 @@ function renderPayments() {
                 <td>${escapeHtml(payment.mode)}</td>
                 <td>${escapeHtml(payment.remarks || "-")}</td>
                 <td class="row-actions">
+                  <button data-edit-payment="${payment.id}">Edit</button>
                   <button data-payment-room-slip="${payment.id}">Room Slip</button>
                   <button class="danger" data-delete-payment="${payment.id}">Delete</button>
                 </td>
@@ -1677,7 +1680,10 @@ function renderElectricity() {
                   <td>${money(bill.rate)}</td>
                   <td>${money(bill.fixedCharge)}</td>
                   <td>${money(bill.amount)}</td>
-                  <td class="row-actions"><button class="danger" data-delete-electricity="${bill.id}">Delete</button></td>
+                  <td class="row-actions">
+                    <button data-edit-electricity="${bill.id}">Edit</button>
+                    <button class="danger" data-delete-electricity="${bill.id}">Delete</button>
+                  </td>
                 </tr>
               `
             ),
@@ -2172,9 +2178,10 @@ els.paymentForm.addEventListener("submit", (event) => {
   const paymentMonth = els.paymentMonth.value;
   const rentAmount = Number(els.paymentAmount.value) || 0;
   const electricityAmount = Number(els.paymentElectricityAmount.value) || 0;
+  const existing = data.payments.find((payment) => payment.id === els.paymentId.value);
 
-  data.payments.push({
-    id: crypto.randomUUID(),
+  const payment = {
+    id: existing?.id || crypto.randomUUID(),
     roomId: els.paymentRoom.value,
     month: paymentMonth,
     rentAmount,
@@ -2183,15 +2190,22 @@ els.paymentForm.addEventListener("submit", (event) => {
     date: els.paymentDate.value,
     mode: els.paymentMode.value,
     remarks: els.paymentRemarks.value.trim()
-  });
+  };
+
+  if (existing) {
+    Object.assign(existing, payment);
+  } else {
+    data.payments.push(payment);
+  }
 
   saveData();
   els.paymentForm.reset();
+  els.paymentId.value = "";
   els.paymentMonth.value = paymentMonth;
   els.paymentListMonth.value = paymentMonth;
   els.paymentDate.value = today();
   els.paymentElectricityAmount.value = 0;
-  toast("Payment recorded");
+  toast(existing ? "Payment updated" : "Payment recorded");
   renderAll();
 });
 
@@ -2214,7 +2228,9 @@ els.electricityForm.addEventListener("submit", (event) => {
 
   const billMonth = els.electricityMonth.value;
   const { units, amount } = calculateElectricity();
-  const existing = data.electricity.find((bill) => bill.roomId === els.electricityRoom.value && bill.month === billMonth);
+  const existing =
+    data.electricity.find((bill) => bill.id === els.electricityId.value) ||
+    data.electricity.find((bill) => bill.roomId === els.electricityRoom.value && bill.month === billMonth);
   const bill = {
     id: existing?.id || crypto.randomUUID(),
     roomId: els.electricityRoom.value,
@@ -2237,6 +2253,7 @@ els.electricityForm.addEventListener("submit", (event) => {
 
   saveData();
   els.electricityForm.reset();
+  els.electricityId.value = "";
   els.electricityMonth.value = billMonth;
   els.electricityListMonth.value = billMonth;
   els.electricityReadingDate.value = today();
@@ -2297,6 +2314,23 @@ document.addEventListener("click", (event) => {
   if (paymentRoomSlipId) {
     const payment = data.payments.find((item) => item.id === paymentRoomSlipId);
     if (payment) window.open(ownerWhatsappLink(buildPaymentSlipMessage(payment)), "_blank", "noopener");
+  }
+
+  const editPaymentId = target.dataset.editPayment;
+  if (editPaymentId) {
+    const payment = data.payments.find((item) => item.id === editPaymentId);
+    if (!payment) return;
+    els.paymentId.value = payment.id;
+    els.paymentRoom.value = payment.roomId || "";
+    els.paymentMonth.value = payment.month || thisMonth();
+    els.paymentAmount.value = paymentRentAmount(payment);
+    els.paymentElectricityAmount.value = paymentElectricityAmount(payment);
+    els.paymentDate.value = payment.date || today();
+    els.paymentMode.value = payment.mode || "Cash";
+    els.paymentRemarks.value = payment.remarks || "";
+    els.paymentListMonth.value = els.paymentMonth.value;
+    setView("payments");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   const ownerSummary = target.dataset.ownerSummary;
@@ -2386,6 +2420,24 @@ document.addEventListener("click", (event) => {
     saveData();
     renderAll();
     toast("Payment deleted");
+  }
+
+  const editElectricityId = target.dataset.editElectricity;
+  if (editElectricityId) {
+    const bill = data.electricity.find((item) => item.id === editElectricityId);
+    if (!bill) return;
+    els.electricityId.value = bill.id;
+    els.electricityRoom.value = bill.roomId || "";
+    els.electricityMonth.value = bill.month || thisMonth();
+    els.electricityListMonth.value = els.electricityMonth.value;
+    els.electricityReadingDate.value = bill.readingDate || bill.createdAt || today();
+    els.previousReading.value = bill.previousReading ?? 0;
+    els.currentReading.value = bill.currentReading ?? 0;
+    els.unitRate.value = bill.rate || electricityRate();
+    els.fixedCharge.value = bill.fixedCharge || 0;
+    calculateElectricity();
+    setView("electricity");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   const deleteElectricityId = target.dataset.deleteElectricity;
