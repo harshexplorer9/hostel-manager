@@ -1424,46 +1424,78 @@ function renderTenants() {
   const selectedMonth = els.tenantListMonth.value || thisMonth();
   const tenants = sortTenantsRoomWise(tenantsForMonth(selectedMonth).filter(tenantMatchesSearch));
   els.tenantCount.textContent = `${tenants.length} tenants`;
-  els.tenantsTable.innerHTML = table(
-    ["Name", "Mobile", "Room", "Rent", "Joining / Leaving", "ID Proof", "Documents", "Emergency", "Status", "Actions"],
-    tenants.map(
-      (tenant) => {
-        const docs = documentChecklistText(tenant);
-        const leaveDays = tenant.leaveDate ? daysUntil(tenant.leaveDate) : null;
-        const leavingBadge =
-          tenant.leaveDate && leaveDays >= 0 && leaveDays <= 30 ? `<br><span class="badge orange">Leaving in ${leaveDays} days</span>` : "";
-        return `
-          <tr>
-            <td><strong>${escapeHtml(tenant.name)}</strong><br><small>${escapeHtml(tenant.address || "")}</small></td>
-            <td>
-              <div class="mobile-cell">
-                <strong>${escapeHtml(tenant.mobile)}</strong>
-                <small>${escapeHtml(tenant.altMobile || "")}</small>
-                <button class="contact-button" data-contact-tenant="${tenant.id}">Call / WhatsApp</button>
-              </div>
-            </td>
-            <td>${escapeHtml(tenantRoomLabel(tenant))}</td>
-            <td>${money(tenantRentAmountForMonth(tenant, selectedMonth))}</td>
-            <td>
-              Join: ${escapeHtml(tenant.joinDate || "-")}<br>
-              <small>Leave: ${escapeHtml(tenant.leaveDate || "-")}</small>
-              ${leavingBadge}
-            </td>
-            <td>${escapeHtml(tenant.idType || "-")}<br><small>${escapeHtml(tenant.idNumber || "")}</small></td>
-            <td><strong>${docs.completed}/${docs.total}</strong><br><small>${escapeHtml(docs.missing)}</small></td>
-            <td>${escapeHtml(tenant.emergency || "-")}</td>
-            <td><span class="badge ${tenant.status === "Active" ? "green" : "orange"}">${escapeHtml(tenant.status)}</span></td>
-            <td class="row-actions">
-              <button data-edit-tenant="${tenant.id}">Edit</button>
-              <button data-settlement-tenant="${tenant.id}">Settlement</button>
-              <button class="danger" data-delete-tenant="${tenant.id}">Delete</button>
-            </td>
-          </tr>
-        `;
-      }
-    ),
-    `No tenants found for ${monthLabel(selectedMonth)}.`
-  );
+
+  if (!tenants.length) {
+    els.tenantsTable.innerHTML = `<div class="empty">No tenants found for ${monthLabel(selectedMonth)}.</div>`;
+    return;
+  }
+
+  const grouped = new Map();
+  tenants.forEach((tenant) => {
+    const room = findRoom(tenant.roomId);
+    const key = room?.id || "no-room";
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        room,
+        roomNumber: room?.number || "No room",
+        tenants: []
+      });
+    }
+    grouped.get(key).tenants.push(tenant);
+  });
+
+  els.tenantsTable.innerHTML = Array.from(grouped.values())
+    .sort((a, b) => a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }))
+    .map((group) => {
+      const room = group.room;
+      const capacity = room ? roomCapacity(room) : group.tenants.length;
+      return `
+        <section class="room-report">
+          <div class="room-report-head">
+            <strong>${room ? `Room ${escapeHtml(group.roomNumber)}` : "No room assigned"}</strong>
+            <span>${group.tenants.length}/${capacity} tenants | ${monthLabel(selectedMonth)}</span>
+          </div>
+          ${table(
+            ["Name", "Mobile", "Rent", "Joining / Leaving", "ID Proof", "Documents", "Emergency", "Status", "Actions"],
+            group.tenants.map((tenant) => {
+              const docs = documentChecklistText(tenant);
+              const leaveDays = tenant.leaveDate ? daysUntil(tenant.leaveDate) : null;
+              const leavingBadge =
+                tenant.leaveDate && leaveDays >= 0 && leaveDays <= 30 ? `<br><span class="badge orange">Leaving in ${leaveDays} days</span>` : "";
+              return `
+                <tr>
+                  <td><strong>${escapeHtml(tenant.name)}</strong><br><small>${escapeHtml(tenant.address || "")}</small></td>
+                  <td>
+                    <div class="mobile-cell">
+                      <strong>${escapeHtml(tenant.mobile)}</strong>
+                      <small>${escapeHtml(tenant.altMobile || "")}</small>
+                      <button class="contact-button" data-contact-tenant="${tenant.id}">Call / WhatsApp</button>
+                    </div>
+                  </td>
+                  <td>${money(tenantRentAmountForMonth(tenant, selectedMonth))}</td>
+                  <td>
+                    Join: ${escapeHtml(tenant.joinDate || "-")}<br>
+                    <small>Leave: ${escapeHtml(tenant.leaveDate || "-")}</small>
+                    ${leavingBadge}
+                  </td>
+                  <td>${escapeHtml(tenant.idType || "-")}<br><small>${escapeHtml(tenant.idNumber || "")}</small></td>
+                  <td><strong>${docs.completed}/${docs.total}</strong><br><small>${escapeHtml(docs.missing)}</small></td>
+                  <td>${escapeHtml(tenant.emergency || "-")}</td>
+                  <td><span class="badge ${tenant.status === "Active" ? "green" : "orange"}">${escapeHtml(tenant.status)}</span></td>
+                  <td class="row-actions">
+                    <button data-edit-tenant="${tenant.id}">Edit</button>
+                    <button data-settlement-tenant="${tenant.id}">Settlement</button>
+                    <button class="danger" data-delete-tenant="${tenant.id}">Delete</button>
+                  </td>
+                </tr>
+              `;
+            }),
+            `No tenants found for Room ${group.roomNumber}.`
+          )}
+        </section>
+      `;
+    })
+    .join("");
 }
 
 function renderPayments() {
