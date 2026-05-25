@@ -123,8 +123,17 @@ function doPost(e) {
   return jsonResponse({ ok: true, url: spreadsheet.getUrl(), counts });
 }
 
-function doGet() {
+function doGet(e) {
   const spreadsheet = getOrCreateSpreadsheet();
+  if (e && e.parameter && e.parameter.test) {
+    writeSheet(spreadsheet, "Backup Debug", [
+      ["Test Received At", new Date()],
+      ["Source", e.parameter.source || ""],
+      ["Time", e.parameter.time || ""],
+      ["Status", "Apps Script URL and deployment are working"],
+      ["Spreadsheet URL", spreadsheet.getUrl()]
+    ]);
+  }
   return ContentService.createTextOutput(`Google Sheet backup is ready: ${spreadsheet.getUrl()}`);
 }
 

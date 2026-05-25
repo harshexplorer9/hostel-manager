@@ -173,6 +173,7 @@ const els = {
   sheetSyncForm: document.querySelector("#sheetSyncForm"),
   sheetSyncUrl: document.querySelector("#sheetSyncUrl"),
   sheetSyncNow: document.querySelector("#sheetSyncNow"),
+  sheetSyncTest: document.querySelector("#sheetSyncTest"),
   sheetSyncStatus: document.querySelector("#sheetSyncStatus"),
   closeCloudSheet: document.querySelector("#closeCloudSheet")
 };
@@ -959,6 +960,7 @@ function sheetSyncUrl() {
 function renderSheetSyncStatus(message) {
   els.sheetSyncUrl.value = sheetSyncUrl();
   els.sheetSyncNow.disabled = !sheetSyncUrl();
+  els.sheetSyncTest.disabled = !sheetSyncUrl();
   els.sheetSyncStatus.textContent = message || (sheetSyncUrl() ? "Google Sheet backup is enabled." : "Paste Apps Script Web App URL to auto-backup data in Google Sheet.");
 }
 
@@ -2172,6 +2174,18 @@ els.sheetSyncNow.addEventListener("click", async () => {
     renderSheetSyncStatus("Sheet sync failed. Check Apps Script deployment URL.");
     toast("Sheet sync failed");
   }
+});
+
+els.sheetSyncTest.addEventListener("click", () => {
+  const url = sheetSyncUrl();
+  if (!url) {
+    toast("Paste Apps Script URL first");
+    return;
+  }
+
+  const testUrl = `${url}${url.includes("?") ? "&" : "?"}test=1&source=hostel-app&time=${encodeURIComponent(new Date().toISOString())}`;
+  window.open(testUrl, "_blank", "noopener");
+  renderSheetSyncStatus("Test opened. Check Backup Debug tab in Google Sheet.");
 });
 
 els.cloudLogout.addEventListener("click", () => {
