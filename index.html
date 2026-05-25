@@ -12,10 +12,10 @@
       content="Manage hostel rooms, tenants, rent payments, room-wise electricity bills, and monthly dues."
     />
     <title>B M Boys Hostel</title>
-    <link rel="manifest" href="manifest.webmanifest?v=31" />
+    <link rel="manifest" href="manifest.webmanifest?v=32" />
     <link rel="icon" href="icons/hostel-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icons/hostel-icon.svg" />
-    <link rel="stylesheet" href="styles.css?v=31" />
+    <link rel="stylesheet" href="styles.css?v=32" />
   </head>
   <body>
     <section id="loginGate" class="login-gate" hidden>
@@ -130,19 +130,6 @@
         </section>
 
         <section id="rooms" class="view">
-          <form id="rentSettingsForm" class="panel settings-panel">
-            <div class="panel-head">
-              <h3>Rent Settings</h3>
-              <span class="pill">Total room rent by occupancy</span>
-            </div>
-            <div class="settings-grid">
-              <label>1 Tenant Total<input id="rentFor1" type="number" min="0" required /></label>
-              <label>2 Tenants Total<input id="rentFor2" type="number" min="0" required /></label>
-              <label>3 Tenants Total<input id="rentFor3" type="number" min="0" required /></label>
-              <label>4 Tenants Total<input id="rentFor4" type="number" min="0" required /></label>
-              <button type="submit">Save Rent Settings</button>
-            </div>
-          </form>
           <div class="content-grid">
             <form id="roomForm" class="panel form-panel">
               <h3>Add / Update Room</h3>
@@ -164,6 +151,19 @@
               <div id="roomsTable"></div>
             </section>
           </div>
+          <form id="rentSettingsForm" class="panel settings-panel">
+            <div class="panel-head">
+              <h3>Rent Settings</h3>
+              <span class="pill">Total room rent by occupancy</span>
+            </div>
+            <div class="settings-grid">
+              <label>1 Tenant Total<input id="rentFor1" type="number" min="0" required /></label>
+              <label>2 Tenants Total<input id="rentFor2" type="number" min="0" required /></label>
+              <label>3 Tenants Total<input id="rentFor3" type="number" min="0" required /></label>
+              <label>4 Tenants Total<input id="rentFor4" type="number" min="0" required /></label>
+              <button type="submit">Save Rent Settings</button>
+            </div>
+          </form>
         </section>
 
         <section id="tenants" class="view">
@@ -196,7 +196,10 @@
             <section class="panel list-panel">
               <div class="panel-head">
                 <h3>Tenants</h3>
-                <span id="tenantCount" class="pill">0 tenants</span>
+                <div class="panel-tools">
+                  <label class="inline-control">Month<select id="tenantListMonth"></select></label>
+                  <span id="tenantCount" class="pill">0 tenants</span>
+                </div>
               </div>
               <div id="tenantsTable"></div>
             </section>
@@ -231,9 +234,10 @@
         <section id="electricity" class="view">
           <div class="content-grid">
             <form id="electricityForm" class="panel form-panel">
-              <h3>Record Electricity Bill</h3>
+              <h3>Record Electricity Reading</h3>
               <label>Room<select id="electricityRoom" required></select></label>
               <label>Month<select id="electricityMonth" required></select></label>
+              <label>Reading Date<input id="electricityReadingDate" type="date" required /></label>
               <label>Previous Reading<input id="previousReading" type="number" min="0" required /></label>
               <label>Current Reading<input id="currentReading" type="number" min="0" required /></label>
               <label>Rate Per Unit<input id="unitRate" type="number" min="0" step="0.01" value="8.5" required /></label>
@@ -245,11 +249,11 @@
                 <span>Bill Amount</span>
                 <strong id="calculatedBill">₹0</strong>
               </div>
-              <button type="submit">Save Electricity Bill</button>
+              <button type="submit">Save Reading & Bill</button>
             </form>
             <section class="panel list-panel">
               <div class="panel-head">
-                <h3>Electricity Bills</h3>
+                <h3>Electricity Readings</h3>
                 <div class="panel-tools">
                   <label class="inline-control">Bill Month<select id="electricityListMonth"></select></label>
                   <span id="electricityCount" class="pill">0 bills</span>
@@ -371,6 +375,6 @@
         projectId: "hostel-manage-4ab56"
       };
     </script>
-    <script src="app.js?v=31"></script>
+    <script src="app.js?v=32"></script>
   </body>
 </html>

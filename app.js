@@ -110,6 +110,7 @@ const els = {
   resetTenantForm: document.querySelector("#resetTenantForm"),
   tenantsTable: document.querySelector("#tenantsTable"),
   tenantCount: document.querySelector("#tenantCount"),
+  tenantListMonth: document.querySelector("#tenantListMonth"),
   paymentForm: document.querySelector("#paymentForm"),
   paymentRoom: document.querySelector("#paymentRoom"),
   paymentMonth: document.querySelector("#paymentMonth"),
@@ -124,6 +125,7 @@ const els = {
   electricityRoom: document.querySelector("#electricityRoom"),
   electricityMonth: document.querySelector("#electricityMonth"),
   electricityListMonth: document.querySelector("#electricityListMonth"),
+  electricityReadingDate: document.querySelector("#electricityReadingDate"),
   previousReading: document.querySelector("#previousReading"),
   currentReading: document.querySelector("#currentReading"),
   unitRate: document.querySelector("#unitRate"),
@@ -370,6 +372,7 @@ function monthOptions(rangeBefore = 18, rangeAfter = 6) {
   });
   data.tenants.forEach((tenant) => {
     if (tenant.joinDate) months.add(tenant.joinDate.slice(0, 7));
+    if (tenant.leaveDate) months.add(tenant.leaveDate.slice(0, 7));
   });
 
   for (let offset = -rangeBefore; offset <= rangeAfter; offset += 1) {
@@ -389,8 +392,42 @@ function activeTenants() {
   return data.tenants.filter((tenant) => tenant.status === "Active");
 }
 
+function monthStart(month) {
+  return `${month}-01`;
+}
+
+function monthEnd(month) {
+  return `${month}-${String(daysInMonth(month)).padStart(2, "0")}`;
+}
+
+function tenantsForMonth(month) {
+  const start = monthStart(month);
+  const end = monthEnd(month);
+  return data.tenants.filter((tenant) => {
+    const joined = !tenant.joinDate || tenant.joinDate <= end;
+    const notLeft = !tenant.leaveDate || tenant.leaveDate >= start;
+    return joined && notLeft;
+  });
+}
+
+function roomSortValue(roomId) {
+  const room = findRoom(roomId);
+  return room?.number || "zz";
+}
+
+function sortTenantsRoomWise(tenants) {
+  return tenants.slice().sort((a, b) => {
+    const roomSort = roomSortValue(a.roomId).localeCompare(roomSortValue(b.roomId), undefined, { numeric: true });
+    return roomSort || (a.joinDate || "").localeCompare(b.joinDate || "") || a.name.localeCompare(b.name);
+  });
+}
+
 function roomTenants(roomId) {
   return activeTenants().filter((tenant) => tenant.roomId === roomId);
+}
+
+function roomTenantsForMonth(roomId, month) {
+  return tenantsForMonth(month).filter((tenant) => tenant.roomId === roomId);
 }
 
 function roomCapacity(room) {
@@ -420,6 +457,13 @@ function tenantRentAmount(tenant) {
   const tenantRent = Number(tenant.rent);
   if (Number.isFinite(tenantRent) && tenantRent > 0) return tenantRent;
   const tenantCount = Math.max(roomTenants(tenant.roomId).length, 1);
+  return occupancyRent(tenantCount) / tenantCount;
+}
+
+function tenantRentAmountForMonth(tenant, month) {
+  const tenantRent = Number(tenant.rent);
+  if (Number.isFinite(tenantRent) && tenantRent > 0) return tenantRent;
+  const tenantCount = Math.max(roomTenantsForMonth(tenant.roomId, month).length, 1);
   return occupancyRent(tenantCount) / tenantCount;
 }
 
@@ -941,6 +985,7 @@ function buildSpreadsheetPayload() {
       units: bill.units,
       rate: bill.rate,
       fixedCharge: bill.fixedCharge,
+      readingDate: bill.readingDate || bill.createdAt || "",
       amount: bill.amount
     })),
     report: reportRows.map((row) => ({
@@ -1089,6 +1134,7 @@ function renderMonthOptions() {
   const electricityValue = els.electricityMonth.value || thisMonth();
   const electricityListValue = els.electricityListMonth.value || electricityValue;
   const reportValue = els.reportMonth.value || thisMonth();
+  const tenantListValue = els.tenantListMonth.value || thisMonth();
   const options = months.map((month) => `<option value="${month}">${escapeHtml(monthLabel(month))}</option>`).join("");
 
   els.paymentMonth.innerHTML = options;
@@ -1096,11 +1142,13 @@ function renderMonthOptions() {
   els.electricityMonth.innerHTML = options;
   els.electricityListMonth.innerHTML = options;
   els.reportMonth.innerHTML = options;
+  els.tenantListMonth.innerHTML = options;
   els.paymentMonth.value = months.includes(paymentValue) ? paymentValue : thisMonth();
   els.paymentListMonth.value = months.includes(paymentListValue) ? paymentListValue : els.paymentMonth.value;
   els.electricityMonth.value = months.includes(electricityValue) ? electricityValue : thisMonth();
   els.electricityListMonth.value = months.includes(electricityListValue) ? electricityListValue : els.electricityMonth.value;
   els.reportMonth.value = months.includes(reportValue) ? reportValue : thisMonth();
+  els.tenantListMonth.value = months.includes(tenantListValue) ? tenantListValue : thisMonth();
 }
 
 function renderTenantOptions() {
@@ -1329,10 +1377,12 @@ function renderDashboard() {
 }
 
 function renderRooms() {
-  const rooms = data.rooms.filter((room) => {
-    const tenants = roomTenants(room.id).map((tenant) => tenant.name).join(" ");
-    return [room.number, room.floor, tenants].join(" ").toLowerCase().includes(currentSearch);
-  });
+  const rooms = data.rooms
+    .filter((room) => {
+      const tenants = roomTenants(room.id).map((tenant) => tenant.name).join(" ");
+      return [room.number, room.floor, tenants].join(" ").toLowerCase().includes(currentSearch);
+    })
+    .sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
 
   els.roomCount.textContent = `${rooms.length} rooms`;
   els.roomsTable.innerHTML = table(
@@ -1371,7 +1421,8 @@ function renderRooms() {
 }
 
 function renderTenants() {
-  const tenants = data.tenants.filter(tenantMatchesSearch);
+  const selectedMonth = els.tenantListMonth.value || thisMonth();
+  const tenants = sortTenantsRoomWise(tenantsForMonth(selectedMonth).filter(tenantMatchesSearch));
   els.tenantCount.textContent = `${tenants.length} tenants`;
   els.tenantsTable.innerHTML = table(
     ["Name", "Mobile", "Room", "Rent", "Joining / Leaving", "ID Proof", "Documents", "Emergency", "Status", "Actions"],
@@ -1392,7 +1443,7 @@ function renderTenants() {
               </div>
             </td>
             <td>${escapeHtml(tenantRoomLabel(tenant))}</td>
-            <td>${money(tenantRentAmount(tenant))}</td>
+            <td>${money(tenantRentAmountForMonth(tenant, selectedMonth))}</td>
             <td>
               Join: ${escapeHtml(tenant.joinDate || "-")}<br>
               <small>Leave: ${escapeHtml(tenant.leaveDate || "-")}</small>
@@ -1411,7 +1462,7 @@ function renderTenants() {
         `;
       }
     ),
-    "No tenants found."
+    `No tenants found for ${monthLabel(selectedMonth)}.`
   );
 }
 
@@ -1486,38 +1537,92 @@ function calculateElectricity() {
   return { units, amount };
 }
 
+function lastElectricityBillBefore(roomId, month) {
+  return data.electricity
+    .filter((bill) => bill.roomId === roomId && bill.month && bill.month < month)
+    .sort((a, b) => b.month.localeCompare(a.month) || String(b.readingDate || b.createdAt || "").localeCompare(String(a.readingDate || a.createdAt || "")))[0];
+}
+
+function fillPreviousReadingFromHistory() {
+  if (!els.electricityRoom.value || !els.electricityMonth.value) return;
+  const existing = data.electricity.find((bill) => bill.roomId === els.electricityRoom.value && bill.month === els.electricityMonth.value);
+  const previousBill = lastElectricityBillBefore(els.electricityRoom.value, els.electricityMonth.value);
+  els.previousReading.value = existing?.previousReading ?? previousBill?.currentReading ?? "";
+  if (existing) {
+    els.currentReading.value = existing.currentReading;
+    els.unitRate.value = existing.rate || electricityRate();
+    els.fixedCharge.value = existing.fixedCharge || 0;
+    els.electricityReadingDate.value = existing.readingDate || existing.createdAt || today();
+  }
+  calculateElectricity();
+}
+
 function renderElectricity() {
   const selectedMonth = els.electricityListMonth.value || thisMonth();
-  const bills = data.electricity.filter((bill) => bill.month === selectedMonth);
+  const bills = data.electricity
+    .filter((bill) => bill.month === selectedMonth)
+    .slice()
+    .sort((a, b) => {
+      const roomSort = (findRoom(a.roomId)?.number || "").localeCompare(findRoom(b.roomId)?.number || "", undefined, { numeric: true });
+      return roomSort || String(a.readingDate || a.createdAt || "").localeCompare(String(b.readingDate || b.createdAt || ""));
+    });
   els.electricityCount.textContent = `${bills.length} bills`;
-  els.electricityTable.innerHTML = table(
-    ["Room", "Month", "Previous", "Current", "Units", "Rate", "Fixed", "Amount", "Actions"],
-    bills
-      .slice()
-      .sort((a, b) => b.month.localeCompare(a.month))
-      .map(
-        (bill) => `
-        <tr>
-          <td>Room ${escapeHtml(findRoom(bill.roomId)?.number || "Deleted")}</td>
-          <td>${escapeHtml(bill.month)}</td>
-          <td>${bill.previousReading}</td>
-          <td>${bill.currentReading}</td>
-          <td>${bill.units}</td>
-          <td>${money(bill.rate)}</td>
-          <td>${money(bill.fixedCharge)}</td>
-          <td>${money(bill.amount)}</td>
-          <td class="row-actions"><button class="danger" data-delete-electricity="${bill.id}">Delete</button></td>
-        </tr>
-      `
-      ),
-    `No electricity bills recorded for ${monthLabel(selectedMonth)}.`
-  );
+  if (!bills.length) {
+    els.electricityTable.innerHTML = `<div class="empty">No electricity readings recorded for ${monthLabel(selectedMonth)}.</div>`;
+    return;
+  }
+
+  const grouped = new Map();
+  bills.forEach((bill) => {
+    const room = findRoom(bill.roomId);
+    const key = room?.id || "deleted-room";
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        roomNumber: room?.number || "Deleted",
+        bills: []
+      });
+    }
+    grouped.get(key).bills.push(bill);
+  });
+
+  els.electricityTable.innerHTML = Array.from(grouped.values())
+    .map((group) => {
+      const total = group.bills.reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
+      return `
+        <section class="room-report">
+          <div class="room-report-head">
+            <strong>Room ${escapeHtml(group.roomNumber)}</strong>
+            <span>${group.bills.length} readings | ${money(total)}</span>
+          </div>
+          ${table(
+            ["Month", "Reading Date", "Previous", "Current", "Units", "Rate", "Fixed", "Amount", "Actions"],
+            group.bills.map(
+              (bill) => `
+                <tr>
+                  <td>${escapeHtml(monthLabel(bill.month))}</td>
+                  <td>${escapeHtml(bill.readingDate || bill.createdAt || "-")}</td>
+                  <td>${bill.previousReading}</td>
+                  <td>${bill.currentReading}</td>
+                  <td>${bill.units}</td>
+                  <td>${money(bill.rate)}</td>
+                  <td>${money(bill.fixedCharge)}</td>
+                  <td>${money(bill.amount)}</td>
+                  <td class="row-actions"><button class="danger" data-delete-electricity="${bill.id}">Delete</button></td>
+                </tr>
+              `
+            ),
+            "No electricity readings recorded."
+          )}
+        </section>
+      `;
+    })
+    .join("");
 }
 
 function getMonthlyReport(month) {
-  return activeTenants().map((tenant) => {
+  return tenantsForMonth(month).map((tenant) => {
     const room = findRoom(tenant.roomId);
-    const rentDue = tenantRentAmount(tenant);
+    const rentDue = tenantRentAmountForMonth(tenant, month);
     const tenantDirectPaid = data.payments
       .filter((payment) => payment.tenantId === tenant.id && payment.month === month)
       .reduce((sum, payment) => sum + Number(payment.amount), 0);
@@ -1527,7 +1632,7 @@ function getMonthlyReport(month) {
     const electricityDue = data.electricity
       .filter((bill) => bill.roomId === tenant.roomId && bill.month === month)
       .reduce((sum, bill) => sum + Number(bill.amount), 0);
-    const roomActiveTenants = Math.max(roomTenants(tenant.roomId).length, 1);
+    const roomActiveTenants = Math.max(roomTenantsForMonth(tenant.roomId, month).length, 1);
     const roomPaidShare = roomPaymentTotal / roomActiveTenants;
     const rentPaid = tenantDirectPaid + roomPaidShare;
     const tenantElectricity = electricityDue / roomActiveTenants;
@@ -2022,10 +2127,12 @@ els.electricityForm.addEventListener("submit", (event) => {
 
   const billMonth = els.electricityMonth.value;
   const { units, amount } = calculateElectricity();
-  data.electricity.push({
-    id: crypto.randomUUID(),
+  const existing = data.electricity.find((bill) => bill.roomId === els.electricityRoom.value && bill.month === billMonth);
+  const bill = {
+    id: existing?.id || crypto.randomUUID(),
     roomId: els.electricityRoom.value,
     month: billMonth,
+    readingDate: els.electricityReadingDate.value,
     previousReading: Number(els.previousReading.value) || 0,
     currentReading: Number(els.currentReading.value) || 0,
     units,
@@ -2033,19 +2140,30 @@ els.electricityForm.addEventListener("submit", (event) => {
     fixedCharge: Number(els.fixedCharge.value) || 0,
     amount,
     createdAt: today()
-  });
+  };
+
+  if (existing) {
+    Object.assign(existing, bill);
+  } else {
+    data.electricity.push(bill);
+  }
 
   saveData();
   els.electricityForm.reset();
   els.electricityMonth.value = billMonth;
   els.electricityListMonth.value = billMonth;
+  els.electricityReadingDate.value = today();
   els.unitRate.value = electricityRate();
   els.fixedCharge.value = 0;
+  fillPreviousReadingFromHistory();
   calculateElectricity();
-  toast("Electricity bill recorded");
+  toast(existing ? "Electricity reading updated" : "Electricity reading recorded");
   renderAll();
 });
 els.electricityListMonth.addEventListener("change", renderAll);
+els.electricityRoom.addEventListener("change", fillPreviousReadingFromHistory);
+els.electricityMonth.addEventListener("change", fillPreviousReadingFromHistory);
+els.tenantListMonth.addEventListener("change", renderAll);
 
 els.saveDefaultRate.addEventListener("click", () => {
   const rate = Number(els.unitRate.value);
@@ -2229,9 +2347,12 @@ els.paymentListMonth.value = thisMonth();
 els.paymentDate.value = today();
 els.electricityMonth.value = thisMonth();
 els.electricityListMonth.value = thisMonth();
+els.electricityReadingDate.value = today();
 els.reportMonth.value = thisMonth();
+els.tenantListMonth.value = thisMonth();
 els.unitRate.value = electricityRate();
 resetTenantForm();
+fillPreviousReadingFromHistory();
 calculateElectricity();
 setupInstallExperience();
 renderCloudStatus();

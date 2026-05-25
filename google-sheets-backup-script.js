@@ -84,10 +84,11 @@ function doPost(e) {
   ]);
 
   writeSheet(spreadsheet, "Electricity", [
-    ["Room", "Month", "Previous", "Current", "Units", "Rate", "Fixed Charge", "Amount"],
+    ["Room", "Month", "Reading Date", "Previous", "Current", "Units", "Rate", "Fixed Charge", "Amount"],
     ...(payload.electricity || []).map((row) => [
       row.room,
       row.month,
+      row.readingDate,
       row.previousReading,
       row.currentReading,
       row.units,

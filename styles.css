@@ -295,7 +295,7 @@ button.secondary:hover,
 }
 
 .settings-panel {
-  margin-bottom: 18px;
+  margin: 18px 0;
 }
 
 .settings-grid {
@@ -455,7 +455,7 @@ textarea:focus {
 
 table {
   border-collapse: collapse;
-  min-width: 760px;
+  min-width: 700px;
   width: 100%;
 }
 
@@ -904,6 +904,38 @@ td {
   .topbar-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .panel-head,
+  .panel-tools {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .panel-tools,
+  .inline-control {
+    width: 100%;
+  }
+
+  table {
+    min-width: 620px;
+  }
+
+  th,
+  td {
+    padding: 10px 8px;
+  }
+
+  #roomsTable,
+  #tenantsTable,
+  #electricityTable {
+    margin-inline: -8px;
+  }
+
+  .row-actions button,
+  .contact-button,
+  .due-button {
+    width: 100%;
   }
 
   .sync-pill {
