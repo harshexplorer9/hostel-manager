@@ -1,4 +1,4 @@
-const CACHE_NAME = "hostel-manager-v33";
+const CACHE_NAME = "hostel-manager-v34";
 const APP_ASSETS = [
   "./",
   "./index.html",

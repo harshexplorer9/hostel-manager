@@ -1450,9 +1450,9 @@ function renderTenants() {
       const room = group.room;
       const capacity = room ? roomCapacity(room) : group.tenants.length;
       return `
-        <section class="room-report">
+        <section class="room-report tenant-room-group">
           <div class="room-report-head">
-            <strong>${room ? `Room ${escapeHtml(group.roomNumber)}` : "No room assigned"}</strong>
+            <strong>${room ? `Room ${escapeHtml(group.roomNumber)} Tenants` : "No room assigned"}</strong>
             <span>${group.tenants.length}/${capacity} tenants | ${monthLabel(selectedMonth)}</span>
           </div>
           ${table(

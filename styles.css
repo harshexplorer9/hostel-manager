@@ -568,6 +568,40 @@ td {
   border-top: 1px solid var(--line);
 }
 
+.tenant-room-group {
+  background: #ffffff;
+  border: 2px solid #c7ddd2;
+  box-shadow: 0 12px 28px rgba(24, 37, 29, 0.08);
+  margin-bottom: 18px;
+}
+
+.tenant-room-group .room-report-head {
+  background: #dff4ea;
+  border-bottom: 1px solid #c7ddd2;
+}
+
+.tenant-room-group .room-report-head strong {
+  color: var(--accent-dark);
+  font-size: 16px;
+}
+
+.tenant-room-group .table-wrap {
+  border-top: 0;
+  padding: 8px;
+}
+
+.tenant-room-group table {
+  min-width: 680px;
+}
+
+.tenant-room-group tbody tr {
+  background: #ffffff;
+}
+
+.tenant-room-group tbody tr + tr td {
+  border-top: 1px solid var(--line);
+}
+
 .total-row {
   background: #f7faf7;
 }
