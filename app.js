@@ -5,6 +5,9 @@ const AUTH_STORAGE_KEY = "hostel-manager-auth-v1";
 const NOTIFY_STORAGE_KEY = "hostel-manager-due-notifications-v1";
 const CLOUD_CONFIG = window.HOSTEL_CLOUD_CONFIG || {};
 const MAX_TENANTS_PER_ROOM = 4;
+const AUTHORIZED_OWNER_EMAILS = (window.HOSTEL_AUTHORIZED_EMAILS || ["harshexplorer9@gmail.com"]).map((email) =>
+  String(email).trim().toLowerCase()
+);
 
 const defaultData = {
   settings: {
@@ -228,6 +231,12 @@ function saveAuth(auth) {
 }
 
 function updateAuthGate() {
+  if (cloudAuth?.email && !ownerEmailAllowed(cloudAuth.email)) {
+    saveAuth(null);
+    toast("This email is not allowed for this hostel app");
+    return;
+  }
+
   const loggedIn = Boolean(cloudAuth?.idToken);
   els.loginGate.hidden = loggedIn;
   document.body.classList.toggle("auth-locked", !loggedIn);
@@ -257,6 +266,10 @@ function rentDueDay() {
 
 function ownerWhatsapp() {
   return data.settings?.ownerWhatsapp || "9639875555";
+}
+
+function ownerEmailAllowed(email) {
+  return AUTHORIZED_OWNER_EMAILS.includes(String(email || "").trim().toLowerCase());
 }
 
 function ensureSettings() {
@@ -821,6 +834,9 @@ async function authenticateCloud(mode, credentials = {}) {
 
   const email = (credentials.email || els.cloudEmail.value || els.gateEmail.value).trim();
   const password = credentials.password || els.cloudPassword.value || els.gatePassword.value;
+  if (mode === "signup") throw new Error("new login creation is disabled for this app");
+  if (!ownerEmailAllowed(email)) throw new Error("this email is not allowed for this hostel app");
+
   const action = mode === "signup" ? "signUp" : "signInWithPassword";
   const auth = await cloudRequest(authUrl(action), {
     method: "POST",
